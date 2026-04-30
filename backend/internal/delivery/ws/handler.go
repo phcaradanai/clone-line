@@ -65,16 +65,18 @@ func (c *Client) readPump() {
 			if msg.UserID == "" {
 				msg.UserID = c.ID
 			}
-			// Save to database
-			if err := c.Usecase.SendMessage(&msg); err == nil {
-				// Broadcast the enriched message
-				broadcastMsg, _ := json.Marshal(msg)
-				c.Hub.broadcast <- broadcastMsg
-			} else {
-				log.Printf("failed to save message: %v", err)
+			
+			// Try to save to database but don't block broadcasting if it fails
+			err := c.Usecase.SendMessage(&msg)
+			if err != nil {
+				log.Printf("Warning: Failed to save message to DB: %v", err)
 			}
+			
+			// Broadcast the message to everyone (including the sender)
+			broadcastMsg, _ := json.Marshal(msg)
+			c.Hub.broadcast <- broadcastMsg
 		} else {
-			// If not JSON, just broadcast as is (for simple testing)
+			log.Printf("Received non-JSON message or invalid format: %s", string(message))
 			c.Hub.broadcast <- message
 		}
 	}
