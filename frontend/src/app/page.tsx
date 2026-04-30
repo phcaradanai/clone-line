@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, Suspense } from 'react';
 import { Send, Image as ImageIcon, Smile, MoreVertical, Search } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
 import { useSearchParams } from 'next/navigation';
@@ -8,7 +8,7 @@ import { useSearchParams } from 'next/navigation';
 const USER1_ID = "00000000-0000-0000-0000-000000000001";
 const USER2_ID = "00000000-0000-0000-0000-000000000003";
 
-export default function ChatPage() {
+function ChatContent() {
   const [inputValue, setInputValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();
@@ -208,5 +208,13 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading Chat...</div>}>
+      <ChatContent />
+    </Suspense>
   );
 }
