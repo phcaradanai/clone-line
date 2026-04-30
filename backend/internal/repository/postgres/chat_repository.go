@@ -23,8 +23,15 @@ func (r *chatRepository) SaveMessage(msg *domain.Message) error {
 }
 
 func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) {
-	query := `SELECT m.id, m.room_id, m.user_id, m.content, m.type, m.file_url, m.created_at,
-	          u.username, u.display_name, u.avatar_url
+	query := `SELECT m.id, m.room_id, 
+	          COALESCE(m.user_id::text, ''), 
+	          COALESCE(m.content, ''), 
+	          m.type, 
+	          COALESCE(m.file_url, ''), 
+	          m.created_at,
+	          COALESCE(u.username, 'anonymous'), 
+	          COALESCE(u.display_name, 'Unknown User'), 
+	          COALESCE(u.avatar_url, '')
 	          FROM messages m
 	          LEFT JOIN users u ON m.user_id = u.id
 	          WHERE m.room_id = $1
