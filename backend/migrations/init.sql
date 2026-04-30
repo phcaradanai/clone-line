@@ -1,4 +1,4 @@
--- Users Table
+-- 1. Create Tables First
 CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
@@ -8,7 +8,6 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Rooms Table (Chat Groups or 1-on-1)
 CREATE TABLE IF NOT EXISTS rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100),
@@ -16,7 +15,6 @@ CREATE TABLE IF NOT EXISTS rooms (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Room Members (Junction Table)
 CREATE TABLE IF NOT EXISTS room_members (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -24,7 +22,6 @@ CREATE TABLE IF NOT EXISTS room_members (
     PRIMARY KEY (room_id, user_id)
 );
 
--- Messages Table
 CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
@@ -35,6 +32,19 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Indexes for performance
+-- 2. Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
+
+-- 3. Essential Seed Data
+-- Insert Default Room for testing
+INSERT INTO rooms (id, name, is_group) 
+VALUES ('00000000-0000-0000-0000-000000000002', 'General Chat', TRUE)
+ON CONFLICT (id) DO NOTHING;
+
+-- Insert Default Users for testing
+INSERT INTO users (id, username, display_name)
+VALUES 
+    ('00000000-0000-0000-0000-000000000001', 'TestUser1', 'Test User 1'),
+    ('00000000-0000-0000-0000-000000000003', 'TestUser2', 'Test User 2')
+ON CONFLICT (id) DO NOTHING;
