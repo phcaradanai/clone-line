@@ -117,7 +117,7 @@ func main() {
 			return
 		}
 		
-		messages, err := chatUsecase.GetMessages(roomID, 50, 0) // ดึง 50 ข้อความล่าสุด
+		messages, err := chatUsecase.GetChatHistory(roomID, 50, 0) // ดึง 50 ข้อความล่าสุด
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
