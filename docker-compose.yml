@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-chatuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-chatpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-chatdb}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - chat_network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - chat_network
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z-cpuv1
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadminpassword}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - chat_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-chatuser}:${POSTGRES_PASSWORD:-chatpassword}@postgres:5432/${POSTGRES_DB:-chatdb}?sslmode=disable
+      PORT: 8888
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadminpassword}
+      MINIO_BUCKET: ${MINIO_BUCKET:-chat-uploads}
+    depends_on:
+      - postgres
+      - redis
+      - minio
+    ports:
+      - "8888:8888"
+    networks:
+      - chat_network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    environment:
+      NEXT_PUBLIC_BACKEND_URL: ${NEXT_PUBLIC_BACKEND_URL:-http://localhost:8888}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - chat_network
+
+volumes:
+  postgres_data:
+  minio_data:
+
+networks:
+  chat_network:
+    driver: bridge

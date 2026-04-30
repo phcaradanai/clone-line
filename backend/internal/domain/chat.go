@@ -1,0 +1,42 @@
+package domain
+
+import (
+	"time"
+)
+
+type User struct {
+	ID          string    `json:"id"`
+	Username    string    `json:"username"`
+	DisplayName string    `json:"display_name"`
+	AvatarURL   string    `json:"avatar_url"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type Room struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	IsGroup   bool      `json:"is_group"`
+	CreatedAt time.Time `json:"created_at"`
+	Members   []User    `json:"members,omitempty"`
+}
+
+type Message struct {
+	ID        string    `json:"id"`
+	RoomID    string    `json:"room_id"`
+	UserID    string    `json:"user_id"`
+	Content   string    `json:"content"`
+	Type      string    `json:"type"` // text, image, file
+	FileURL   string    `json:"file_url,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	User      *User     `json:"user,omitempty"`
+}
+
+type ChatRepository interface {
+	SaveMessage(msg *Message) error
+	GetMessages(roomID string, limit int, offset int) ([]Message, error)
+	GetRooms(userID string) ([]Room, error)
+	GetRoom(roomID string) (*Room, error)
+	CreateRoom(room *Room, memberIDs []string) error
+	RegisterUser(user *User) error
+}

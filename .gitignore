@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+**/node_modules/
+.pnp
+.pnp.*
+
+# Next.js
+.next/
+out/
+build/
+**/next-env.d.ts
+**/*.tsbuildinfo
+
+# Go
+backend/server
+backend/bin/
+**/*.exe
+**/*.exe~
+**/*.dll
+**/*.so
+**/*.dylib
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.env
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Docker
+.docker/
+# Data volumes (if any local)
+postgres_data/
+minio_data/
+
+# Claude/Agent metadata
+.claude/
+C:/Users/phcar/.gemini/antigravity/brain/f8d0253d-6e7c-410b-b2e5-bec758bcce78/
