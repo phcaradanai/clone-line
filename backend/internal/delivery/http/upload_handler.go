@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 type UploadHandler struct {
 	minioClient *minio.Client
 	bucketName  string
+	publicURL   string
 }
 
 func NewUploadHandler(endpoint, accessKey, secretKey, bucket string) (*UploadHandler, error) {
@@ -47,6 +49,7 @@ func NewUploadHandler(endpoint, accessKey, secretKey, bucket string) (*UploadHan
 	return &UploadHandler{
 		minioClient: client,
 		bucketName:  bucket,
+		publicURL:   os.Getenv("MINIO_PUBLIC_URL"),
 	}, nil
 }
 
@@ -74,8 +77,12 @@ func (h *UploadHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// In a real app, the URL would be served via a CDN or a signed URL
-	fileURL := fmt.Sprintf("http://localhost:9000/%s/%s", h.bucketName, fileName)
+	// Generate public URL
+	publicURL := h.publicURL
+	if publicURL == "" {
+		publicURL = "http://localhost:9000"
+	}
+	fileURL := fmt.Sprintf("%s/%s/%s", publicURL, h.bucketName, fileName)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
