@@ -28,6 +28,20 @@ func main() {
 		log.Fatal("Unable to connect to database:", err)
 	}
 	defer dbPool.Close()
+	
+	// Run migrations
+	migrationPath := "migrations/init.sql"
+	migrationSQL, err := os.ReadFile(migrationPath)
+	if err != nil {
+		log.Printf("Warning: Could not read migration file: %v", err)
+	} else {
+		_, err = dbPool.Exec(context.Background(), string(migrationSQL))
+		if err != nil {
+			log.Printf("Warning: Could not run migrations: %v", err)
+		} else {
+			log.Println("Migrations applied successfully")
+		}
+	}
 
 	// Initialize Repositories & Usecases
 	chatRepo := postgres.NewChatRepository(dbPool)

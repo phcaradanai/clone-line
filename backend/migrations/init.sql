@@ -1,5 +1,5 @@
 -- Users Table
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
     display_name VARCHAR(100),
@@ -9,7 +9,7 @@ CREATE TABLE users (
 );
 
 -- Rooms Table (Chat Groups or 1-on-1)
-CREATE TABLE rooms (
+CREATE TABLE IF NOT EXISTS rooms (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100),
     is_group BOOLEAN DEFAULT FALSE,
@@ -17,7 +17,7 @@ CREATE TABLE rooms (
 );
 
 -- Room Members (Junction Table)
-CREATE TABLE room_members (
+CREATE TABLE IF NOT EXISTS room_members (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -25,7 +25,7 @@ CREATE TABLE room_members (
 );
 
 -- Messages Table
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
@@ -36,5 +36,5 @@ CREATE TABLE messages (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_messages_room_id ON messages(room_id);
-CREATE INDEX idx_room_members_user_id ON room_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
+CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
