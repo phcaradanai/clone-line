@@ -30,9 +30,15 @@ export function useChat(roomId: string, userId: string) {
       host = envBackendUrl.replace(/^https?:\/\//, '');
     }
 
-    const wsUrl = `${protocol}//${host}:8080/ws?user_id=${userId}`;
-    // ถ้าใช้ Cloudflare Tunnel พอร์ตจะเป็นพอร์ตของ HTTPS (ไม่ต้องระบุ :8080)
-    const finalWsUrl = envBackendUrl ? `${isSecure ? 'wss:' : 'ws:'}//${host}/ws?user_id=${userId}` : wsUrl;
+    const wsUrl = `${protocol}//${host}:8888/ws?user_id=${userId}`;
+    
+    // ถ้ามีการระบุ Backend URL ภายนอก ให้พยายามสร้าง WebSocket URL จากค่านั้น
+    let finalWsUrl = wsUrl;
+    if (envBackendUrl) {
+      const wsProtocol = envBackendUrl.startsWith('https') ? 'wss:' : 'ws:';
+      const wsHost = envBackendUrl.replace(/^https?:\/\//, '');
+      finalWsUrl = `${wsProtocol}//${wsHost}/ws?user_id=${userId}`;
+    }
     
     const socket = new WebSocket(finalWsUrl);
     socketRef.current = socket;
