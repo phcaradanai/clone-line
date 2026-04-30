@@ -9,6 +9,12 @@ FROM node:20-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# รับค่า Argument จากภายนอกตอน Build
+ARG NEXT_PUBLIC_BACKEND_URL
+# ตั้งค่าให้เป็น Environment Variable เพื่อให้ Next.js มองเห็นตอน Build
+ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+
 # Next.js collects completely anonymous telemetry data about general usage.
 # Learn more here: https://nextjs.org/telemetry
 # Uncomment the following line in case you want to disable telemetry during the build.
