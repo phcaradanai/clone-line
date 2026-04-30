@@ -109,6 +109,24 @@ func main() {
 		mux.HandleFunc("/upload", uploadHandler.HandleUpload)
 	}
 
+	// Chat History endpoint
+	mux.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
+		roomID := r.URL.Query().Get("room_id")
+		if roomID == "" {
+			http.Error(w, "room_id is required", http.StatusBadRequest)
+			return
+		}
+		
+		messages, err := chatUsecase.GetMessages(roomID, 50, 0) // ดึง 50 ข้อความล่าสุด
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(messages)
+	})
+
 	mux.HandleFunc("/register", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

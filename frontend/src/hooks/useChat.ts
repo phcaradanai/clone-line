@@ -19,7 +19,34 @@ export function useChat(roomId: string, userId: string) {
   const socketRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    // เช็คว่าเป็นการเชื่อมต่อแบบ Secure หรือไม่
+    // 1. Load History
+    const loadHistory = async () => {
+      try {
+        let baseUrl = `http://${window.location.hostname}:8888`;
+        const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (envBackendUrl) {
+          baseUrl = envBackendUrl;
+        }
+        
+        const response = await fetch(`${baseUrl}/messages?room_id=${roomId}`);
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+          const formattedMessages = data.reverse().map((msg: any) => ({
+            ...msg,
+            sender: msg.user_id === userId ? 'me' : 'other',
+            time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }));
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        console.error("Failed to load history", error);
+      }
+    };
+
+    loadHistory();
+
+    // 2. Setup WebSocket
     const isSecure = window.location.protocol === 'https:';
     const protocol = isSecure ? 'wss:' : 'ws:';
     let host = window.location.hostname;
