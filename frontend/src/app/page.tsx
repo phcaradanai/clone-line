@@ -124,20 +124,28 @@ function ChatContent() {
   useEffect(() => {
     const initUser = async () => {
       const userParam = searchParams.get("user");
-
+      
+      // priority 1: user=1 or user=2 in URL
+      if (userParam === "1") {
+        const u = { id: USER1_ID, username: "Test User 1" };
+        setCurrentUser(u);
+        console.log("[AUTH] currentUser (from ?user=1):", u);
+        return;
+      }
       if (userParam === "2") {
-        setCurrentUser({
-          id: USER2_ID,
-          username: "Test User 2",
-        });
+        const u = { id: USER2_ID, username: "Test User 2" };
+        setCurrentUser(u);
+        console.log("[AUTH] currentUser (from ?user=2):", u);
         return;
       }
 
+      // priority 2: localStorage
       const savedUser = localStorage.getItem("chat_user");
-
       if (savedUser) {
         try {
-          setCurrentUser(JSON.parse(savedUser));
+          const u = JSON.parse(savedUser);
+          setCurrentUser(u);
+          console.log("[AUTH] currentUser (from localStorage):", u);
         } catch {
           localStorage.removeItem("chat_user");
         }
@@ -440,7 +448,7 @@ function ChatContent() {
         <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex-1 overflow-y-auto bg-[#F0F2F5] p-4"
+          className="flex-1 overflow-y-auto bg-[#F0F2F5] px-3 py-4 md:px-4"
           style={{
             overscrollBehaviorY: "contain",
             WebkitOverflowScrolling: "touch",
@@ -458,49 +466,57 @@ function ChatContent() {
             </div>
           )}
 
-          {!isLoadingMessages && messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"
-                }`}
-            >
+          {messages.map((msg, index) => {
+            const isMe = msg.sender === "me";
+            const isNewSender = index === 0 || messages[index - 1].sender !== msg.sender;
+            
+            return (
               <div
-                className={`max-w-[78%] rounded-2xl px-4 py-2 shadow-sm md:max-w-[70%] ${msg.sender === "me"
-                    ? "rounded-tr-none bg-[#06C755] text-white"
-                    : "rounded-tl-none border border-gray-100 bg-white text-gray-800"
-                  }`}
+                key={msg.id || index}
+                className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${
+                  isMe ? "justify-end" : "justify-start"
+                } ${isNewSender ? "pt-3" : "pt-1"}`}
               >
-                {msg.type === "image" ? (
-                  <img
-                    src={msg.file_url}
-                    alt="Uploaded"
-                    className="mb-1 h-auto max-w-full rounded-lg"
-                  />
-                ) : (
-                  <p className="whitespace-pre-wrap break-words text-sm leading-5">
-                    {msg.content}
-                  </p>
-                )}
-
-                <div className={`mt-1 flex items-center gap-1 ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
-                  {msg.sender === "me" && (msg.read_count || 0) > 0 && (
-                    <span className="text-[10px] text-green-100">
-                      Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
-                    </span>
-                  )}
-                  <span
-
-                    className={`block text-[10px] ${msg.sender === "me"
-                        ? "text-green-100"
-                        : "text-gray-400"
-                      }`}
+                <div
+                  className={`relative flex max-w-[82%] flex-col md:max-w-[70%] ${
+                    isMe ? "items-end" : "items-start"
+                  }`}
+                >
+                  <div
+                    className={`rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm ${
+                      isMe
+                        ? "bg-[#06C755] text-white rounded-tr-[4px]"
+                        : "bg-white text-gray-800 rounded-tl-[4px] border border-gray-100"
+                    }`}
                   >
-                    {msg.time}
-                  </span>
+                    {msg.type === "image" ? (
+                      <img
+                        src={msg.file_url}
+                        alt="Uploaded"
+                        className="mb-1 h-auto max-w-full rounded-lg"
+                      />
+                    ) : (
+                      <p className="whitespace-pre-wrap break-words leading-5">
+                        {msg.content}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className={`mt-1.5 flex items-center gap-1.5 text-[10px] ${
+                    isMe ? "flex-row-reverse" : "flex-row"
+                  }`}>
+                    <span className={isMe ? "text-[#06C755]/70" : "text-gray-400"}>
+                      {msg.time}
+                    </span>
+                    {isMe && (msg.read_count || 0) > 0 && (
+                      <span className="font-medium text-[#06C755]">
+                        Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
+                      </span>
+                    )}
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {!isLoadingMessages && !messagesError && messages.length === 0 && (
             <div className="flex h-full flex-col items-center justify-center space-y-2 text-gray-400">

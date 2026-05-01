@@ -199,12 +199,13 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
       const readEvent = {
         type: 'message:read',
         payload: {
-          roomId,
-          userId,
-          lastReadMessageId,
-          readAt: new Date().toISOString()
+          room_id: roomId,
+          user_id: userId,
+          last_read_message_id: lastReadMessageId,
+          read_at: new Date().toISOString()
         }
       };
+      console.log("[READ] sending payload:", readEvent);
       socketRef.current.send(JSON.stringify(readEvent));
     }
   }, [roomId, userId]);

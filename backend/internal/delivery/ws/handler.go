@@ -79,19 +79,26 @@ func (c *Client) readPump() {
 		
 		if err := json.Unmarshal(message, &event); err == nil && event.Type == "message:read" {
 			var payload struct {
-				RoomID            string `json:"roomId"`
-				UserID            string `json:"userId"`
-				LastReadMessageID string `json:"lastReadMessageId"`
-				ReadAt            string `json:"readAt"`
+				RoomID            string `json:"room_id"`
+				UserID            string `json:"user_id"`
+				LastReadMessageID string `json:"last_read_message_id"`
+				ReadAt            string `json:"read_at"`
 			}
 			if err := json.Unmarshal(event.Payload, &payload); err == nil {
+				log.Printf("[WS] message:read received from user %s for room %s", payload.UserID, payload.RoomID)
+				
 				// Update persistence
 				err := c.Usecase.MarkAsRead(payload.RoomID, payload.UserID, payload.LastReadMessageID)
 				if err != nil {
-					log.Printf("Warning: Failed to mark as read: %v", err)
+					log.Printf("[DB] Mark read error: %v", err)
+				} else {
+					log.Printf("[WS] message:read broadcast start")
+					// Broadcast the read receipt to others in the room
+					c.Hub.broadcast <- message
+					log.Printf("[WS] message:read broadcast success")
 				}
-				// Broadcast the read receipt to others in the room
-				c.Hub.broadcast <- message
+			} else {
+				log.Printf("[WS] Failed to parse message:read payload: %v", err)
 			}
 			continue
 		}

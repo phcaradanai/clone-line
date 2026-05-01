@@ -20,8 +20,18 @@ func NewChatRepository(db *pgxpool.Pool) domain.ChatRepository {
 func (r *chatRepository) SaveMessage(msg *domain.Message) error {
 	query := `INSERT INTO messages (room_id, user_id, content, type, file_url) 
 	          VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`
-	return r.db.QueryRow(context.Background(), query, msg.RoomID, msg.UserID, msg.Content, msg.Type, msg.FileURL).
+	err := r.db.QueryRow(context.Background(), query, msg.RoomID, msg.UserID, msg.Content, msg.Type, msg.FileURL).
 		Scan(&msg.ID, &msg.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	// Increment unread count for other members
+	updateUnreadQuery := `UPDATE room_members SET unread_count = unread_count + 1 
+	                      WHERE room_id = $1 AND user_id != $2`
+	_, _ = r.db.Exec(context.Background(), updateUnreadQuery, msg.RoomID, msg.UserID)
+	
+	return nil
 }
 
 func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) {
@@ -35,7 +45,12 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 			       m.type, 
 			       COALESCE(m.file_url, '') as file_url, 
 			       m.created_at,
-			       0 as read_count,
+			       (SELECT COUNT(rm.user_id) 
+			        FROM room_members rm 
+			        JOIN messages m_read ON rm.last_read_message_id = m_read.id
+			        WHERE rm.room_id = m.room_id 
+			        AND rm.user_id != m.user_id 
+			        AND m_read.created_at >= m.created_at) as read_count,
 			       COALESCE(u.username, 'anonymous') as username, 
 			       COALESCE(u.display_name, 'Unknown User') as display_name, 
 			       COALESCE(u.avatar_url, '') as avatar_url
@@ -72,11 +87,24 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 }
 
 func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessageID string) error {
+	log.Printf("[DB] mark read attempt | user: %s | room: %s | msg: %s", userID, roomID, lastReadMessageID)
+	
 	query := `UPDATE room_members 
-	          SET last_read_message_id = $1, last_read_at = NOW() 
+	          SET last_read_message_id = $1, last_read_at = NOW(), unread_count = 0 
 	          WHERE room_id = $2 AND user_id = $3`
-	_, err := r.db.Exec(context.Background(), query, lastReadMessageID, roomID, userID)
-	return err
+	result, err := r.db.Exec(context.Background(), query, lastReadMessageID, roomID, userID)
+	if err != nil {
+		return err
+	}
+
+	rowsAffected := result.RowsAffected()
+	log.Printf("[DB] mark read success | rows_affected: %d", rowsAffected)
+	
+	if rowsAffected == 0 {
+		log.Printf("[READ] Warning: No room_member row updated. User %s might not be in room %s", userID, roomID)
+	}
+
+	return nil
 }
 
 func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, error) {
@@ -95,7 +123,7 @@ func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, erro
 
 func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	query := `SELECT r.id, COALESCE(r.name, ''), r.is_group, r.created_at, rm.last_read_message_id, rm.last_read_at,
-	          0 as unread_count,
+	          rm.unread_count,
 	          lm.id, COALESCE(lm.content, ''), lm.type, lm.created_at
 	          FROM rooms r
 	          JOIN room_members rm ON r.id = rm.room_id

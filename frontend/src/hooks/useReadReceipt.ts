@@ -16,22 +16,35 @@ export function useReadReceipt(
   const lastReadIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // Only send read receipt if:
-    // 1. Tab is visible
-    // 2. User is near the bottom
-    // 3. There are messages
-    
-    if (typeof document === "undefined" || document.visibilityState !== "visible" || !isAtBottom || messages.length === 0) {
-      return;
-    }
-
     const latestOtherMessage = [...messages].reverse().find(m => m.sender === "other");
-    
-    if (latestOtherMessage && latestOtherMessage.id && latestOtherMessage.id !== lastReadIdRef.current) {
+    const shouldSend = !!(
+      typeof document !== "undefined" && 
+      document.visibilityState === "visible" && 
+      isAtBottom && 
+      messages.length > 0 && 
+      latestOtherMessage && 
+      latestOtherMessage.id && 
+      latestOtherMessage.id !== lastReadIdRef.current
+    );
+
+    console.log("[READ] check:", {
+      roomId: messages[0]?.room_id,
+      userId,
+      messagesCount: messages.length,
+      latestMessageId: messages[messages.length - 1]?.id,
+      latestOtherMessageId: latestOtherMessage?.id,
+      isAtBottom,
+      visibility: typeof document !== "undefined" ? document.visibilityState : "unknown",
+      lastSentReadId: lastReadIdRef.current,
+      shouldSend
+    });
+
+    if (shouldSend && latestOtherMessage) {
+      console.log("[READ] sending payload for message:", latestOtherMessage.id);
       sendReadReceipt(latestOtherMessage.id);
       lastReadIdRef.current = latestOtherMessage.id;
     }
-  }, [messages, isAtBottom, sendReadReceipt]);
+  }, [messages, isAtBottom, sendReadReceipt, userId]);
 
   // Handle tab visibility change
   useEffect(() => {

@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS room_members (
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     last_read_message_id UUID,
     last_read_at TIMESTAMP WITH TIME ZONE,
+    unread_count INTEGER DEFAULT 0,
     PRIMARY KEY (room_id, user_id)
 );
 
