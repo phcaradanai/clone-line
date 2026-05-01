@@ -13,11 +13,11 @@ This document summarizes the improvements and features implemented to transform 
 *   **New Message Indicator**: A floating "New messages ↓" button appears when the user is reading history, preventing unwanted scroll jumps.
 *   **Scroll Locking**: Prevented document-level scrolling to maintain a native app feel.
 
-## 3. Persistent Read Receipts
+## 3. Persistent Read Receipts & Group Support
 *   **Database Integration**: Added `last_read_message_id` and `last_read_at` to the backend schema in PostgreSQL.
 *   **Real-time Sync**: `message:read` events are broadcast via WebSocket and persisted to the database.
-*   **UI Status**: Sent messages display a "Read" label once confirmed by other members, even after a page refresh.
-*   **Group Support**: Read status is calculated based on the collective read progress of room members.
+*   **Group Read Count**: Implemented "Read N" behavior for group chats. Sent messages now display the number of users who have read them (e.g., "Read 2"), matching the LINE experience.
+*   **Reliable Logic**: Fixed a critical bug where read status was calculated using random UUID sorting. Now uses robust `created_at` timestamp comparisons in SQL.
 
 ## 4. Notifications & Unread Tracking
 *   **Persistent Unread Count**: Unread messages are calculated by the backend and fetched on initialization, ensuring the badge survives browser restarts.
@@ -26,11 +26,11 @@ This document summarizes the improvements and features implemented to transform 
 *   **Intelligent Reset**: Unread counts clear automatically when the user views the latest messages or returns to a visible tab.
 
 ## 5. Production Readiness & Stability
+*   **Audit Fixes**: Resolved UUID comparison bugs in both backend (SQL) and frontend (Array index logic), ensuring perfect ordering of read receipts.
+*   **API Enhancements**: The `/rooms` endpoint now returns `last_message` data and accurate unread counts for a complete chat list view.
 *   **Full Type Safety**: Resolved all TypeScript errors and enforced strict literal types for `sender` and `type`.
 *   **Clean Linting**: Fixed React Hook linting errors and ensured efficient rendering cycles.
-*   **Robust Time Handling**: Implemented safe date parsing with fallbacks to prevent "Invalid Date" errors.
-*   **Duplicate Prevention**: Frontend logic to ignore duplicate message IDs during broadcast or reconnection.
-*   **API Stability**: Added `/unread` and `/rooms` endpoints to support persistent state synchronization.
+*   **Robust Sync**: Frontend logic to ignore duplicate message IDs and handle real-time `read_count` updates gracefully.
 
 ## 6. Architecture (Custom Hooks)
 The system is built on a modular hook-based architecture:

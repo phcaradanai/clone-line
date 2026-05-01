@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/phcar/chat-app-backend/internal/domain"
@@ -89,13 +90,13 @@ func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, erro
 }
 
 func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
-	query := `SELECT r.id, r.name, r.is_group, r.created_at, rm.last_read_message_id, rm.last_read_at,
+	query := `SELECT r.id, COALESCE(r.name, ''), r.is_group, r.created_at, rm.last_read_message_id, rm.last_read_at,
 	          (SELECT COUNT(*) FROM messages m 
 	           LEFT JOIN messages m_read ON m_read.id = rm.last_read_message_id
 	           WHERE m.room_id = r.id 
 	           AND m.user_id != $1
 	           AND (rm.last_read_message_id IS NULL OR m.created_at > m_read.created_at)) as unread_count,
-	          lm.id, lm.content, lm.type, lm.created_at
+	          lm.id, COALESCE(lm.content, ''), lm.type, lm.created_at
 	          FROM rooms r
 	          JOIN room_members rm ON r.id = rm.room_id
 	          LEFT JOIN LATERAL (
@@ -117,20 +118,25 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	var rooms []domain.Room
 	for rows.Next() {
 		var rm domain.Room
-		var lm domain.Message
 		var lmID, lmContent, lmType *string
 		var lmCreatedAt *time.Time
 		
-		if err := rows.Scan(&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt, &rm.LastReadMessageID, &rm.LastReadAt, &rm.UnreadCount, &lmID, &lmContent, &lmType, &lmCreatedAt); err != nil {
+		err := rows.Scan(
+			&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt, 
+			&rm.LastReadMessageID, &rm.LastReadAt, &rm.UnreadCount, 
+			&lmID, &lmContent, &lmType, &lmCreatedAt,
+		)
+		if err != nil {
 			return nil, err
 		}
 		
 		if lmID != nil {
-			lm.ID = *lmID
-			lm.Content = *lmContent
-			lm.Type = *lmType
-			lm.CreatedAt = *lmCreatedAt
-			rm.LastMessage = &lm
+			rm.LastMessage = &domain.Message{
+				ID:        *lmID,
+				Content:   *lmContent,
+				Type:      *lmType,
+				CreatedAt: *lmCreatedAt,
+			}
 		}
 		
 		rooms = append(rooms, rm)
@@ -140,7 +146,7 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 
 
 func (r *chatRepository) GetRoom(roomID string) (*domain.Room, error) {
-	query := `SELECT id, name, is_group, created_at FROM rooms WHERE id = $1`
+	query := `SELECT id, COALESCE(name, ''), is_group, created_at FROM rooms WHERE id = $1`
 	var rm domain.Room
 	err := r.db.QueryRow(context.Background(), query, roomID).Scan(&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt)
 	if err != nil {
