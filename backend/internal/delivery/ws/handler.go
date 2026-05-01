@@ -91,12 +91,8 @@ func (c *Client) readPump() {
 				err := c.Usecase.MarkAsRead(payload.RoomID, payload.UserID, payload.LastReadMessageID)
 				if err != nil {
 					log.Printf("[DB] Mark read error: %v", err)
-				} else {
-					log.Printf("[WS] message:read broadcast start")
-					// Broadcast the read receipt to others in the room
-					c.Hub.broadcast <- message
-					log.Printf("[WS] message:read broadcast success")
 				}
+				// Note: broadcast is now handled inside Usecase.MarkAsRead via EventPublisher
 			} else {
 				log.Printf("[WS] Failed to parse message:read payload: %v", err)
 			}
@@ -114,14 +110,12 @@ func (c *Client) readPump() {
 			err := c.Usecase.SendMessage(&msg)
 			if err != nil {
 				log.Printf("Warning: Failed to save message to DB: %v", err)
+				// Broadcast error or original message? Let's just log.
 			}
-			
-			// Broadcast the message to everyone (including the sender)
-			broadcastMsg, _ := json.Marshal(msg)
-			c.Hub.broadcast <- broadcastMsg
+			// Note: broadcast is now handled inside Usecase.SendMessage via EventPublisher
 		} else {
 			log.Printf("Received non-JSON message or invalid format: %s", string(message))
-			c.Hub.broadcast <- message
+			// Do not broadcast raw invalid messages
 		}
 
 	}

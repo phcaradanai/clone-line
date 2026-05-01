@@ -25,17 +25,28 @@ type Room struct {
 	LastReadAt *time.Time `json:"last_read_at,omitempty"`
 }
 
-
+type RoomReadState struct {
+	RoomID            string    `json:"room_id"`
+	UserID            string    `json:"user_id"`
+	LastReadMessageID *string   `json:"last_read_message_id,omitempty"`
+	LastReadAt        time.Time `json:"last_read_at"`
+}
 type Message struct {
 	ID        string    `json:"id"`
 	RoomID    string    `json:"room_id"`
 	UserID    string    `json:"user_id"`
+	ReplyToMessageID *string `json:"reply_to_message_id,omitempty"`
 	Content   string    `json:"content"`
 	Type      string    `json:"type"` // text, image, file
 	FileURL   string    `json:"file_url,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	ReadCount int       `json:"read_count"`
 	User      *User     `json:"user,omitempty"`
+	ReplyToMessage *Message `json:"reply_to_message,omitempty"`
+}
+
+type EventPublisher interface {
+	Publish(roomID string, event interface{})
 }
 
 type ChatRepository interface {
@@ -47,5 +58,14 @@ type ChatRepository interface {
 	RegisterUser(user *User) error
 	MarkAsRead(roomID string, userID string, lastReadMessageID string) error
 	GetUnreadCount(roomID string, userID string) (int, error)
+	GetMessageReaders(roomID string, messageID string) ([]User, error)
+	GetMessage(messageID string) (*Message, error)
 }
 
+type ValidationError struct {
+	Message string
+}
+
+func (e ValidationError) Error() string {
+	return e.Message
+}

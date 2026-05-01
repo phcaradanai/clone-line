@@ -65,13 +65,13 @@ func main() {
 		log.Println("Migrations applied successfully")
 	}
 
-	// Initialize Repositories & Usecases
-	chatRepo := postgres.NewChatRepository(dbPool)
-	chatUsecase := usecase.NewChatUsecase(chatRepo)
-
 	// Initialize WebSocket Hub
 	hub := ws.NewHub()
 	go hub.Run()
+
+	// Initialize Repositories & Usecases
+	chatRepo := postgres.NewChatRepository(dbPool)
+	chatUsecase := usecase.NewChatUsecase(chatRepo, hub)
 
 	// Initialize Image Upload Handler with Retry (Waiting for Minio)
 	var uploadHandler *deliveryHttp.UploadHandler
@@ -109,6 +109,10 @@ func main() {
 	if uploadHandler != nil {
 		mux.HandleFunc("/upload", uploadHandler.HandleUpload)
 	}
+
+	chatHandler := deliveryHttp.NewChatHandler(chatUsecase)
+	mux.HandleFunc("POST /api/v1/rooms/{roomId}/read", chatHandler.MarkAsRead)
+	mux.HandleFunc("GET /api/v1/rooms/{roomId}/messages/{messageId}/readers", chatHandler.GetMessageReaders)
 
 	// Chat History endpoint
 	mux.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,7 @@
 package ws
 
 import (
+	"encoding/json"
 	"log"
 	"sync"
 
@@ -73,5 +74,14 @@ func (h *Hub) Run() {
 			}
 			h.mu.RUnlock()
 		}
+	}
+}
+
+func (h *Hub) Publish(roomID string, event interface{}) {
+	data, err := json.Marshal(event)
+	if err == nil {
+		h.broadcast <- data
+	} else {
+		log.Printf("[WS] Publish error: %v", err)
 	}
 }

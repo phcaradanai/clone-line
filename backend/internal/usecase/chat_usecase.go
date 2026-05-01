@@ -11,20 +11,42 @@ type ChatUsecase interface {
 	RegisterUser(user *domain.User) error
 	MarkAsRead(roomID string, userID string, lastReadMessageID string) error
 	GetUnreadCount(roomID string, userID string) (int, error)
+	GetMessageReaders(roomID string, messageID string) ([]domain.User, error)
 }
-
 
 type chatUsecase struct {
-	repo domain.ChatRepository
+	repo      domain.ChatRepository
+	publisher domain.EventPublisher
 }
 
-func NewChatUsecase(repo domain.ChatRepository) ChatUsecase {
-	return &chatUsecase{repo: repo}
+func NewChatUsecase(repo domain.ChatRepository, publisher domain.EventPublisher) ChatUsecase {
+	return &chatUsecase{repo: repo, publisher: publisher}
 }
 
 func (u *chatUsecase) SendMessage(msg *domain.Message) error {
-	// Add validation or processing if needed
-	return u.repo.SaveMessage(msg)
+	// Validate replyToMessageId if present
+	if msg.ReplyToMessageID != nil {
+		repliedMsg, err := u.repo.GetMessage(*msg.ReplyToMessageID)
+		if err != nil {
+			return err
+		}
+		if repliedMsg.RoomID != msg.RoomID {
+			return domain.ValidationError{Message: "replied message belongs to a different room"}
+		}
+	}
+
+	err := u.repo.SaveMessage(msg)
+	if err != nil {
+		return err
+	}
+
+	if u.publisher != nil {
+		u.publisher.Publish(msg.RoomID, map[string]interface{}{
+			"type": "message.created",
+			"payload": msg,
+		})
+	}
+	return nil
 }
 
 func (u *chatUsecase) GetChatHistory(roomID string, limit, offset int) ([]domain.Message, error) {
@@ -40,10 +62,25 @@ func (u *chatUsecase) RegisterUser(user *domain.User) error {
 }
 
 func (u *chatUsecase) MarkAsRead(roomID string, userID string, lastReadMessageID string) error {
-	return u.repo.MarkAsRead(roomID, userID, lastReadMessageID)
+	err := u.repo.MarkAsRead(roomID, userID, lastReadMessageID)
+	if err == nil && u.publisher != nil {
+		u.publisher.Publish(roomID, map[string]interface{}{
+			"type": "room.read",
+			"payload": map[string]string{
+				"room_id": roomID,
+				"user_id": userID,
+				"last_read_message_id": lastReadMessageID,
+			},
+		})
+	}
+	return err
 }
 
 func (u *chatUsecase) GetUnreadCount(roomID string, userID string) (int, error) {
 	return u.repo.GetUnreadCount(roomID, userID)
+}
+
+func (u *chatUsecase) GetMessageReaders(roomID string, messageID string) ([]domain.User, error) {
+	return u.repo.GetMessageReaders(roomID, messageID)
 }
 

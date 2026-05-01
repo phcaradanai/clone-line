@@ -18,44 +18,55 @@ func NewChatRepository(db *pgxpool.Pool) domain.ChatRepository {
 }
 
 func (r *chatRepository) SaveMessage(msg *domain.Message) error {
-	query := `INSERT INTO messages (room_id, user_id, content, type, file_url) 
-	          VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`
-	err := r.db.QueryRow(context.Background(), query, msg.RoomID, msg.UserID, msg.Content, msg.Type, msg.FileURL).
+	query := `INSERT INTO messages (room_id, user_id, reply_to_message_id, content, type, file_url) 
+	          VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`
+	err := r.db.QueryRow(context.Background(), query, msg.RoomID, msg.UserID, msg.ReplyToMessageID, msg.Content, msg.Type, msg.FileURL).
 		Scan(&msg.ID, &msg.CreatedAt)
 	if err != nil {
 		return err
 	}
 
-	// Increment unread count for other members
-	updateUnreadQuery := `UPDATE room_members SET unread_count = unread_count + 1 
-	                      WHERE room_id = $1 AND user_id != $2`
-	_, _ = r.db.Exec(context.Background(), updateUnreadQuery, msg.RoomID, msg.UserID)
-	
 	return nil
 }
 
+func (r *chatRepository) GetMessage(messageID string) (*domain.Message, error) {
+	query := `SELECT id, room_id, user_id, reply_to_message_id, content, type, file_url, created_at FROM messages WHERE id = $1`
+	var m domain.Message
+	err := r.db.QueryRow(context.Background(), query, messageID).Scan(&m.ID, &m.RoomID, &m.UserID, &m.ReplyToMessageID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
 func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) {
-	// Subquery to get the latest messages first, then order them ASC for the client
 	query := `
-		SELECT id, room_id, user_id, content, type, file_url, created_at, read_count, username, display_name, avatar_url
+		SELECT id, room_id, user_id, reply_to_message_id, content, type, file_url, created_at, read_count, username, display_name, avatar_url,
+		       replied_id, replied_content, replied_type
 		FROM (
 			SELECT m.id, m.room_id, 
 			       COALESCE(m.user_id::text, '') as user_id, 
+			       m.reply_to_message_id,
 			       COALESCE(m.content, '') as content, 
 			       m.type, 
 			       COALESCE(m.file_url, '') as file_url, 
 			       m.created_at,
 			       (SELECT COUNT(rm.user_id) 
 			        FROM room_members rm 
-			        JOIN messages m_read ON rm.last_read_message_id = m_read.id
+			        JOIN room_read_states rrs ON rrs.room_id = rm.room_id AND rrs.user_id = rm.user_id
+			        JOIN messages m_read ON rrs.last_read_message_id = m_read.id
 			        WHERE rm.room_id = m.room_id 
 			        AND rm.user_id != m.user_id 
 			        AND m_read.created_at >= m.created_at) as read_count,
 			       COALESCE(u.username, 'anonymous') as username, 
 			       COALESCE(u.display_name, 'Unknown User') as display_name, 
-			       COALESCE(u.avatar_url, '') as avatar_url
+			       COALESCE(u.avatar_url, '') as avatar_url,
+			       replied.id as replied_id,
+			       replied.content as replied_content,
+			       replied.type as replied_type
 			FROM messages m
 			LEFT JOIN users u ON m.user_id = u.id
+			LEFT JOIN messages replied ON m.reply_to_message_id = replied.id
 			WHERE m.room_id = $1
 			ORDER BY m.created_at DESC
 			LIMIT $2 OFFSET $3
@@ -73,14 +84,32 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	for rows.Next() {
 		var m domain.Message
 		var u domain.User
-		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &m.ReadCount,
-			&u.Username, &u.DisplayName, &u.AvatarURL)
+		var rID, rContent, rType *string
+		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.ReplyToMessageID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &m.ReadCount,
+			&u.Username, &u.DisplayName, &u.AvatarURL, &rID, &rContent, &rType)
 		if err != nil {
 			log.Printf("[DATABASE] GetMessages Scan Error | room_id: %s | error: %v", roomID, err)
 			return nil, err
 		}
 		u.ID = m.UserID
 		m.User = &u
+		
+		if m.ReplyToMessageID != nil {
+			if rID == nil {
+				m.ReplyToMessage = &domain.Message{
+					ID: *m.ReplyToMessageID,
+					Content: "Deleted message",
+					Type: "text",
+				}
+			} else {
+				m.ReplyToMessage = &domain.Message{
+					ID: *rID,
+					Content: COALESCE(rContent, ""),
+					Type: COALESCE(rType, "text"),
+				}
+			}
+		}
+		
 		messages = append(messages, m)
 	}
 	return messages, nil
@@ -89,10 +118,19 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessageID string) error {
 	log.Printf("[DB] mark read attempt | user: %s | room: %s | msg: %s", userID, roomID, lastReadMessageID)
 	
-	query := `UPDATE room_members 
-	          SET last_read_message_id = $1, last_read_at = NOW(), unread_count = 0 
-	          WHERE room_id = $2 AND user_id = $3`
-	result, err := r.db.Exec(context.Background(), query, lastReadMessageID, roomID, userID)
+	query := `
+		INSERT INTO room_read_states (room_id, user_id, last_read_message_id, last_read_at)
+		VALUES ($1, $2, $3, NOW())
+		ON CONFLICT (room_id, user_id) DO UPDATE SET 
+			last_read_message_id = EXCLUDED.last_read_message_id,
+			last_read_at = NOW()
+		WHERE (
+			SELECT created_at FROM messages WHERE id = EXCLUDED.last_read_message_id
+		) > (
+			SELECT created_at FROM messages WHERE id = room_read_states.last_read_message_id
+		) OR room_read_states.last_read_message_id IS NULL;`
+	
+	result, err := r.db.Exec(context.Background(), query, roomID, userID, lastReadMessageID)
 	if err != nil {
 		return err
 	}
@@ -100,20 +138,46 @@ func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessag
 	rowsAffected := result.RowsAffected()
 	log.Printf("[DB] mark read success | rows_affected: %d", rowsAffected)
 	
-	if rowsAffected == 0 {
-		log.Printf("[READ] Warning: No room_member row updated. User %s might not be in room %s", userID, roomID)
-	}
-
 	return nil
+}
+
+func (r *chatRepository) GetMessageReaders(roomID string, messageID string) ([]domain.User, error) {
+	query := `
+		SELECT u.id, COALESCE(u.username, ''), COALESCE(u.display_name, ''), COALESCE(u.avatar_url, '')
+		FROM room_members rm
+		JOIN users u ON rm.user_id = u.id
+		JOIN room_read_states rrs ON rrs.room_id = rm.room_id AND rrs.user_id = rm.user_id
+		JOIN messages m_read ON rrs.last_read_message_id = m_read.id
+		JOIN messages m ON m.id = $2
+		WHERE rm.room_id = $1 
+		AND rm.user_id != m.user_id
+		AND m_read.created_at >= m.created_at`
+	
+	rows, err := r.db.Query(context.Background(), query, roomID, messageID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	users := []domain.User{}
+	for rows.Next() {
+		var u domain.User
+		if err := rows.Scan(&u.ID, &u.Username, &u.DisplayName, &u.AvatarURL); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, nil
 }
 
 func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, error) {
 	query := `SELECT COUNT(*) 
 	          FROM messages m
 	          JOIN room_members rm ON m.room_id = rm.room_id
-	          LEFT JOIN messages m_read ON m_read.id = rm.last_read_message_id
+	          LEFT JOIN room_read_states rrs ON rrs.room_id = rm.room_id AND rrs.user_id = rm.user_id
+	          LEFT JOIN messages m_read ON m_read.id = rrs.last_read_message_id
 	          WHERE rm.room_id = $1 AND rm.user_id = $2
-	          AND (rm.last_read_message_id IS NULL OR m.created_at > m_read.created_at)
+	          AND (rrs.last_read_message_id IS NULL OR m.created_at > m_read.created_at)
 	          AND m.user_id != $2`
 	
 	var count int
@@ -122,11 +186,12 @@ func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, erro
 }
 
 func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
-	query := `SELECT r.id, COALESCE(r.name, ''), r.is_group, r.created_at, rm.last_read_message_id, rm.last_read_at,
-	          rm.unread_count,
+	query := `SELECT r.id, COALESCE(r.name, ''), r.is_group, r.created_at, rrs.last_read_message_id, rrs.last_read_at,
+	          (SELECT COUNT(*) FROM messages m LEFT JOIN messages m_read ON m_read.id = rrs.last_read_message_id WHERE m.room_id = r.id AND m.user_id != $1 AND (rrs.last_read_message_id IS NULL OR m.created_at > m_read.created_at)) as unread_count,
 	          lm.id, COALESCE(lm.content, ''), lm.type, lm.created_at
 	          FROM rooms r
 	          JOIN room_members rm ON r.id = rm.room_id
+	          LEFT JOIN room_read_states rrs ON rrs.room_id = rm.room_id AND rrs.user_id = rm.user_id
 	          LEFT JOIN LATERAL (
 	             SELECT id, content, type, created_at
 	             FROM messages
@@ -189,8 +254,6 @@ func COALESCE_TIME(t *time.Time) time.Time {
 	return *t
 }
 
-
-
 func (r *chatRepository) GetRoom(roomID string) (*domain.Room, error) {
 	query := `SELECT id, COALESCE(name, ''), is_group, created_at FROM rooms WHERE id = $1`
 	var rm domain.Room
@@ -226,10 +289,8 @@ func (r *chatRepository) CreateRoom(room *domain.Room, memberIDs []string) error
 	return tx.Commit(ctx)
 }
 
-
 func (r *chatRepository) RegisterUser(user *domain.User) error {
 	query := `INSERT INTO users (username, display_name) VALUES ($1, $2) RETURNING id, created_at`
 	return r.db.QueryRow(context.Background(), query, user.Username, user.DisplayName).
 		Scan(&user.ID, &user.CreatedAt)
 }
-

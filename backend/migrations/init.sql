@@ -19,9 +19,14 @@ CREATE TABLE IF NOT EXISTS room_members (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    last_read_message_id UUID,
-    last_read_at TIMESTAMP WITH TIME ZONE,
-    unread_count INTEGER DEFAULT 0,
+    PRIMARY KEY (room_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS room_read_states (
+    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    last_read_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
+    last_read_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (room_id, user_id)
 );
 
@@ -29,6 +34,7 @@ CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    reply_to_message_id UUID, -- No hard FK constraint to allow deleted previews
     content TEXT,
     type VARCHAR(20) NOT NULL, -- 'text', 'image', 'file'
     file_url TEXT,
@@ -38,6 +44,7 @@ CREATE TABLE IF NOT EXISTS messages (
 -- 2. Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_room_read_states_user_id ON room_read_states(user_id);
 
 -- 3. Essential Seed Data
 -- Insert Default Room for testing
