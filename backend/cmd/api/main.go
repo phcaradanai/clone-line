@@ -236,15 +236,38 @@ func main() {
 
 	log.Printf("Server starting on port %s...", port)
 	
+	// Middleware for Logging & CORS
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		
+		// CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-		if r.Method == "OPTIONS" { return }
-		mux.ServeHTTP(w, r)
+		
+		if r.Method == "OPTIONS" {
+			return
+		}
+
+		// Wrapper to capture status code
+		type statusWriter struct {
+			http.ResponseWriter
+			status int
+		}
+		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
+
+		mux.ServeHTTP(sw, r)
+
+		duration := time.Since(start)
+		log.Printf("[HTTP] %s %s | Status: %d | Duration: %v", r.Method, r.URL.Path, sw.status, duration)
 	})
 
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func (sw *statusWriter) WriteHeader(status int) {
+	sw.status = status
+	sw.ResponseWriter.WriteHeader(status)
 }

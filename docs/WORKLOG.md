@@ -88,3 +88,39 @@
 
 ### Notes
 - Ensure frontend maps user fields perfectly if backend naming changes in the future.
+
+## 2026-05-02 00:35
+
+### Summary
+- Fixed critical schema mismatch (`sender_id` vs `user_id`) and refined backend reliability.
+- Updated read receipt logic to use `created_at` instead of UUID for monotonic updates.
+- Added HTTP logging middleware and DB context timeouts to prevent Gateway Timeouts.
+- Optimized database indexes for chat history and read states.
+
+### Changed Files
+- backend/migrations/init.sql
+- backend/migrations/20260501_add_reply_and_read_states.sql
+- backend/internal/delivery/ws/hub.go
+- backend/internal/repository/postgres/chat_repository.go
+- backend/cmd/api/main.go
+
+### Details
+- **Schema Alignment**: Removed all references to `sender_id` in SQL and Go code. The system now consistently uses `user_id` as the primary sender identifier.
+- **Monotonic Logic**: Fixed `MarkAsRead` and read-count queries to compare `created_at` timestamps. This is necessary because UUIDs are not ordered and cannot be used for "greater than" comparisons in read receipts.
+- **Reliability**:
+  - **Logging Middleware**: Added `LoggingMiddleware` in `main.go` to track request method, path, status, and execution duration.
+  - **Context Timeouts**: Wrapped all DB queries in `chat_repository.go` with `context.WithTimeout` (5-10s) to fail fast instead of hanging.
+- **Database Performance**:
+  - Added composite index `idx_messages_room_created_at` (room_id, created_at DESC) to speed up chat history retrieval.
+  - Added indexes on `reply_to_message_id`, `user_id`, and `last_read_message_id`.
+- **Query Fixes**: Updated `GetMessages` to include `avatar_url` for replied messages and ensure no duplicate rows.
+
+### Validation
+- **Command**: `npm run lint`
+- **Result**: Passed (Frontend)
+- **Command**: `gofmt`
+- **Result**: Command not found (Environment limitation)
+
+### Notes
+- **Root Cause**: The runtime Gateway Timeout and SQL errors were caused by the app using `sender_id` in some parts while the schema used `user_id`, combined with missing indexes for large message volumes.
+- **Safety**: Migration `20260501_add_reply_and_read_states.sql` is now fully idempotent and safe to run on existing data.

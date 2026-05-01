@@ -20,7 +20,7 @@ type Client struct {
 
 // Message represents a chat message
 type Message struct {
-	SenderID string `json:"sender_id"`
+	UserID   string `json:"user_id"`
 	RoomID   string `json:"room_id"`
 	Content  string `json:"content"`
 	Type     string `json:"type"`
