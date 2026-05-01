@@ -13,10 +13,13 @@ export type Message = {
   sender?: 'me' | 'other';
 };
 
+export type MessageSource = 'sent' | 'received' | null;
+
 export function useChat(roomId: string, userId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
+  const [lastMessageSource, setLastMessageSource] = useState<MessageSource>(null);
 
   useEffect(() => {
     // 1. Load History
@@ -84,6 +87,7 @@ export function useChat(roomId: string, userId: string) {
           sender: data.user_id === userId ? 'me' : 'other',
           time: new Date(data.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
+        setLastMessageSource(incomingMsg.sender === 'me' ? 'sent' : 'received');
         setMessages((prev) => [...prev, incomingMsg]);
       } catch (e) {
         console.error('Failed to parse message', e);
@@ -109,9 +113,10 @@ export function useChat(roomId: string, userId: string) {
         type: type,
         file_url: fileUrl,
       };
+      setLastMessageSource('sent');
       socketRef.current.send(JSON.stringify(msg));
     }
   }, [roomId, userId]);
 
-  return { messages, isConnected, sendMessage };
+  return { messages, isConnected, sendMessage, lastMessageSource };
 }

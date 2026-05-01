@@ -1,8 +1,11 @@
 "use client";
 
-import React, { useState, useRef, Suspense } from 'react';
-import { Send, Image as ImageIcon, Smile, MoreVertical, Search } from 'lucide-react';
+import React, { useState, useRef, useCallback, Suspense } from 'react';
+import { Send, Image as ImageIcon, Smile, MoreVertical, Search, ChevronDown } from 'lucide-react';
 import { useChat } from '@/hooks/useChat';
+import { useChatAutoScroll } from '@/hooks/useChatAutoScroll';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useVisualViewportResize } from '@/hooks/useVisualViewportResize';
 import { useSearchParams } from 'next/navigation';
 
 const USER1_ID = "00000000-0000-0000-0000-000000000001";
@@ -11,7 +14,9 @@ const USER2_ID = "00000000-0000-0000-0000-000000000003";
 function ChatContent() {
   const [inputValue, setInputValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const searchParams = useSearchParams();
+  const isMobile = useIsMobile();
   
   // State สำหรับเก็บข้อมูล User ปัจจุบัน
   const [currentUser, setCurrentUser] = useState<{id: string, username: string} | null>(null);
@@ -54,12 +59,39 @@ function ChatContent() {
   // ใช้ ID จาก currentUser ถ้ามี
   const userId = currentUser?.id || USER1_ID;
   
-  const { messages, sendMessage, isConnected } = useChat(roomId, userId);
+  const { messages, sendMessage, isConnected, lastMessageSource } = useChat(roomId, userId);
+
+  // Auto-scroll hook
+  const {
+    scrollContainerRef,
+    bottomSentinelRef,
+    showNewMessageIndicator,
+    scrollToBottom,
+    handleScroll,
+  } = useChatAutoScroll(messages, lastMessageSource);
+
+  // Visual viewport resize — keep input visible when keyboard opens
+  const handleViewportResize = useCallback(() => {
+    scrollToBottom("instant");
+  }, [scrollToBottom]);
+
+  useVisualViewportResize(handleViewportResize);
+
+  // Auto-focus input on desktop only
+  React.useEffect(() => {
+    if (!isMobile && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isMobile]);
 
   const handleSend = () => {
     if (!inputValue.trim()) return;
     sendMessage(inputValue);
     setInputValue("");
+    // Re-focus input after sending (both mobile and desktop)
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -89,10 +121,10 @@ function ChatContent() {
   };
 
   return (
-    <div className="flex h-screen bg-[#F0F2F5] font-sans antialiased text-gray-900">
+    <div className="flex bg-[#F0F2F5] font-sans antialiased text-gray-900" style={{ height: '100dvh' }}>
       {/* Sidebar - Desktop Only */}
       <div className="hidden md:flex w-80 flex-col bg-white border-r border-gray-200">
-        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f7f9fa]">
+        <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-[#f7f9fa] shrink-0">
           <div>
             <h1 className="font-bold text-xl text-[#06C755]">LINE Clone</h1>
             <p className="text-[10px] text-gray-400">Logged in as: {currentUser?.username || 'Guest'}</p>
@@ -102,7 +134,7 @@ function ChatContent() {
             <MoreVertical className="text-gray-500 cursor-pointer" size={20} />
           </div>
         </div>
-        <div className="p-3">
+        <div className="p-3 shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
             <input 
@@ -127,9 +159,9 @@ function ChatContent() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 flex flex-col bg-white">
-        {/* Chat Header */}
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center shadow-sm">
+      <div className="flex-1 flex flex-col min-h-0 bg-white">
+        {/* Chat Header — shrink-0 keeps it fixed height */}
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center shadow-sm shrink-0">
           <div className="flex items-center">
             <div className="w-10 h-10 rounded-2xl bg-[#06C755] mr-3" />
             <div>
@@ -137,14 +169,19 @@ function ChatContent() {
               <p className="text-xs text-gray-400">{isConnected ? 'Online' : 'Offline'}</p>
             </div>
           </div>
-          <div className="flex space-edge-x-4 text-gray-500">
+          <div className="flex text-gray-500">
             <Search size={20} className="mr-4 cursor-pointer hover:text-[#06C755]" />
             <MoreVertical size={20} className="cursor-pointer hover:text-[#06C755]" />
           </div>
         </div>
 
-        {/* Messages List */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-[#f7f9fa]">
+        {/* Messages List — flex-1 + min-h-0 + overflow-y-auto = independent scroll */}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 bg-[#f7f9fa]"
+          style={{ overscrollBehaviorY: 'contain' }}
+        >
           {messages.map((msg, index) => (
             <div key={index} className={`flex ${msg.sender === 'me' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[70%] rounded-2xl px-4 py-2 shadow-sm ${
@@ -169,10 +206,28 @@ function ChatContent() {
               <p>ยังไม่มีข้อความ เริ่มแชทเลย!</p>
             </div>
           )}
+          {/* Bottom sentinel for reliable scrollIntoView */}
+          <div ref={bottomSentinelRef} aria-hidden="true" className="h-px" />
         </div>
 
-        {/* Input Area */}
-        <div className="p-4 border-t border-gray-100 bg-white">
+        {/* New Message Indicator — floating above input */}
+        {showNewMessageIndicator && (
+          <div className="relative shrink-0">
+            <button
+              onClick={() => scrollToBottom("smooth")}
+              className="new-message-indicator absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1.5 px-4 py-1.5 bg-[#06C755] text-white text-xs font-medium rounded-full shadow-lg hover:bg-[#05b34c] transition-colors z-10"
+            >
+              <ChevronDown size={14} />
+              New messages
+            </button>
+          </div>
+        )}
+
+        {/* Input Area — shrink-0 + safe area padding keeps it fixed at bottom */}
+        <div
+          className="p-4 border-t border-gray-100 bg-white shrink-0"
+          style={{ paddingBottom: `max(1rem, env(safe-area-inset-bottom, 0px))` }}
+        >
           <div className="flex items-center space-x-3 bg-gray-50 rounded-2xl px-4 py-2 border border-gray-200 focus-within:border-[#06C755] transition-all">
             <input 
               type="file" 
@@ -189,13 +244,15 @@ function ChatContent() {
             </button>
             <button className="text-gray-400 hover:text-[#06C755]"><Smile size={20} /></button>
             <input 
+              ref={inputRef}
               type="text" 
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSend()}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
               placeholder={isConnected ? "พิมพ์ข้อความ..." : "กำลังเชื่อมต่อ..."}
               disabled={!isConnected}
               className="flex-1 bg-transparent border-none focus:outline-none text-sm text-gray-800 py-1"
+              enterKeyHint="send"
             />
             <button 
               onClick={handleSend}
@@ -213,7 +270,7 @@ function ChatContent() {
 
 export default function ChatPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading Chat...</div>}>
+    <Suspense fallback={<div className="flex items-center justify-center" style={{ height: '100dvh' }}>Loading Chat...</div>}>
       <ChatContent />
     </Suspense>
   );
