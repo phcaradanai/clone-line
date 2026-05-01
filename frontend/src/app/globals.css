@@ -20,12 +20,9 @@
   }
 }
 
-/* Lock body scroll for full-screen chat layout */
-html, body {
+html,
+body {
   height: 100%;
-  overflow: hidden;
-  overscroll-behavior: none;
-  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -40,6 +37,7 @@ body {
     opacity: 0;
     transform: translateY(8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
