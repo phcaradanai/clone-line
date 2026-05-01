@@ -11,6 +11,7 @@ export type Message = {
   file_url?: string;
   time?: string;
   sender?: 'me' | 'other';
+  read_at?: string;
 };
 
 export type MessageSource = 'sent' | 'received' | null;
@@ -81,6 +82,24 @@ export function useChat(roomId: string, userId: string) {
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
+        if (data.type === 'message:read') {
+          const { lastReadMessageId, readAt, userId: readerId } = data.payload;
+          // If the other user read our messages
+          if (readerId !== userId) {
+            setMessages((prev) => 
+              prev.map((msg) => {
+                // If message is ours and older or equal to lastReadMessageId, and not already read
+                if (msg.sender === 'me' && !msg.read_at && msg.id && msg.id <= lastReadMessageId) {
+                  return { ...msg, read_at: readAt };
+                }
+                return msg;
+              })
+            );
+          }
+          return;
+        }
+
         // Transform incoming message
         const incomingMsg: Message = {
           ...data,
@@ -118,5 +137,21 @@ export function useChat(roomId: string, userId: string) {
     }
   }, [roomId, userId]);
 
-  return { messages, isConnected, sendMessage, lastMessageSource };
+  const sendReadReceipt = useCallback((lastReadMessageId: string) => {
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      const readEvent = {
+        type: 'message:read',
+        payload: {
+          roomId,
+          userId,
+          lastReadMessageId,
+          readAt: new Date().toISOString()
+        }
+      };
+      socketRef.current.send(JSON.stringify(readEvent));
+    }
+  }, [roomId, userId]);
+
+  return { messages, isConnected, sendMessage, sendReadReceipt, lastMessageSource };
 }
+

@@ -22,6 +22,7 @@ export function useChatAutoScroll(
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const bottomSentinelRef = useRef<HTMLDivElement>(null);
   const [showNewMessageIndicator, setShowNewMessageIndicator] = useState(false);
+  const [isNearBottom, setIsNearBottom] = useState(true);
   const isNearBottomRef = useRef(true);
   const prevMessageCountRef = useRef(0);
   const hasInitialScrolled = useRef(false);
@@ -34,6 +35,8 @@ export function useChatAutoScroll(
       bottomSentinelRef.current.scrollIntoView({ behavior });
     }
     setShowNewMessageIndicator(false);
+    setIsNearBottom(true);
+    isNearBottomRef.current = true;
   }, []);
 
   /**
@@ -50,9 +53,12 @@ export function useChatAutoScroll(
    * Handle scroll events to track position.
    */
   const handleScroll = useCallback(() => {
-    isNearBottomRef.current = checkIfNearBottom();
+    const near = checkIfNearBottom();
+    isNearBottomRef.current = near;
+    setIsNearBottom(near);
+    
     // Dismiss indicator if user scrolled to bottom manually
-    if (isNearBottomRef.current) {
+    if (near) {
       setShowNewMessageIndicator(false);
     }
   }, [checkIfNearBottom]);
@@ -93,6 +99,7 @@ export function useChatAutoScroll(
     scrollContainerRef,
     bottomSentinelRef,
     showNewMessageIndicator,
+    isNearBottom,
     scrollToBottom,
     handleScroll,
   };

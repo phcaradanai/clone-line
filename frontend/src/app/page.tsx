@@ -19,6 +19,9 @@ import { useChat } from "@/hooks/useChat";
 import { useChatAutoScroll } from "@/hooks/useChatAutoScroll";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useVisualViewportResize } from "@/hooks/useVisualViewportResize";
+import { useReadReceipt } from "@/hooks/useReadReceipt";
+import { useUnreadBadge } from "@/hooks/useUnreadBadge";
+import { useDocumentTitleUnread } from "@/hooks/useDocumentTitleUnread";
 import { useSearchParams } from "next/navigation";
 
 const USER1_ID = "00000000-0000-0000-0000-000000000001";
@@ -91,7 +94,7 @@ function ChatContent() {
 
   const userId = currentUser?.id || USER1_ID;
 
-  const { messages, sendMessage, isConnected, lastMessageSource } = useChat(
+  const { messages, sendMessage, sendReadReceipt, isConnected, lastMessageSource } = useChat(
     roomId,
     userId
   );
@@ -100,9 +103,15 @@ function ChatContent() {
     scrollContainerRef,
     bottomSentinelRef,
     showNewMessageIndicator,
+    isNearBottom,
     scrollToBottom,
     handleScroll,
   } = useChatAutoScroll(messages, lastMessageSource);
+
+  // Read receipts & Unread notifications
+  useReadReceipt(messages, userId, sendReadReceipt, isNearBottom);
+  const unreadCount = useUnreadBadge(messages, isNearBottom);
+  useDocumentTitleUnread(unreadCount);
 
   const handleViewportResize = useCallback(() => {
     scrollToBottom("instant");
@@ -246,7 +255,14 @@ function ChatContent() {
                 </span>
                 <span className="text-xs text-gray-400">Now</span>
               </div>
-              <p className="truncate text-sm text-[#06C755]">Connected</p>
+              <div className="flex items-center justify-between">
+                <p className="truncate text-sm text-[#06C755]">Connected</p>
+                {unreadCount > 0 && (
+                  <span className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#06C755] px-1.5 text-[10px] font-bold text-white">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -312,14 +328,19 @@ function ChatContent() {
                   </p>
                 )}
 
-                <span
-                  className={`mt-1 block text-[10px] ${msg.sender === "me"
-                      ? "text-right text-green-100"
-                      : "text-gray-400"
-                    }`}
-                >
-                  {msg.time}
-                </span>
+                <div className={`mt-1 flex items-center gap-1 ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
+                  {msg.sender === "me" && msg.read_at && (
+                    <span className="text-[10px] text-green-100">Read</span>
+                  )}
+                  <span
+                    className={`block text-[10px] ${msg.sender === "me"
+                        ? "text-green-100"
+                        : "text-gray-400"
+                      }`}
+                  >
+                    {msg.time}
+                  </span>
+                </div>
               </div>
             </div>
           ))}
