@@ -57,3 +57,34 @@
 
 ### Notes
 - None
+
+## 2026-05-01 23:50
+
+### Summary
+- Fixed reply preview for image messages and implemented jump-to-message feature.
+- Updated backend to map and return replied user details, file_url, and specific preview text.
+- Created `ReplyPreview` React component and updated `page.tsx` to handle DOM scrolling and highlighting.
+
+### Changed Files
+- backend/internal/domain/chat.go
+- backend/internal/repository/postgres/chat_repository.go
+- backend/internal/usecase/chat_usecase.go
+- backend/internal/usecase/chat_usecase_test.go
+- frontend/src/hooks/useChat.ts
+- frontend/src/app/page.tsx
+
+### Details
+- **Domain**: Added `Preview` and `IsDeleted` fields to `domain.Message`.
+- **Repository**: Updated `GetMessages` to `LEFT JOIN` users for the replied message and select `file_url`, generating specific preview texts (e.g. "รูปภาพ", "ไฟล์แนบ", or "ข้อความนี้ถูกลบแล้ว").
+- **Usecase**: Updated `SendMessage` to fully populate the replied message preview payload before broadcasting `message.created`. Updated tests to match the new Thai strings.
+- **Frontend State**: Added `preview`, `is_deleted`, and nested `user` structure to `Message` hook type.
+- **Frontend UI**: Created a reusable `ReplyPreview` component. Replaced old reply UI logic. Added stable `id={"message-"+msg.id}` to bubbles. Added `jumpToMessage` function that triggers `.scrollIntoView()` and temporarily adds a `bg-[#06C755]/10` highlight class.
+
+### Validation
+- **Command**: `npm run lint`
+- **Result**: Passed (Only Next.js Image warnings remaining).
+- **Command**: `go test` (Backend)
+- **Result**: Could not run natively due to environment, but tests updated appropriately.
+
+### Notes
+- Ensure frontend maps user fields perfectly if backend naming changes in the future.

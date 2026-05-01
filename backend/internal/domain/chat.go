@@ -43,6 +43,8 @@ type Message struct {
 	ReadCount int       `json:"read_count"`
 	User      *User     `json:"user,omitempty"`
 	ReplyToMessage *Message `json:"reply_to_message,omitempty"`
+	Preview   string    `json:"preview,omitempty"`
+	IsDeleted bool      `json:"is_deleted,omitempty"`
 }
 
 type EventPublisher interface {

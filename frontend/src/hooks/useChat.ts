@@ -9,12 +9,19 @@ export type Message = {
   reply_to_message_id?: string;
   reply_to_message?: Message;
   content: string;
-  type: 'text' | 'image' | 'file';
+  type: 'text' | 'image' | 'file' | 'deleted';
   file_url?: string;
   time?: string;
   sender?: 'me' | 'other';
   read_count?: number;
   created_at?: string;
+  preview?: string;
+  is_deleted?: boolean;
+  user?: {
+    id: string;
+    username?: string;
+    display_name?: string;
+  };
 };
 
 export type MessageSource = 'sent' | 'received' | null;

@@ -30,11 +30,20 @@ func (r *chatRepository) SaveMessage(msg *domain.Message) error {
 }
 
 func (r *chatRepository) GetMessage(messageID string) (*domain.Message, error) {
-	query := `SELECT id, room_id, user_id, reply_to_message_id, content, type, file_url, created_at FROM messages WHERE id = $1`
+	query := `
+		SELECT m.id, m.room_id, m.user_id, m.reply_to_message_id, m.content, m.type, m.file_url, m.created_at, u.display_name 
+		FROM messages m 
+		LEFT JOIN users u ON m.user_id = u.id
+		WHERE m.id = $1`
 	var m domain.Message
-	err := r.db.QueryRow(context.Background(), query, messageID).Scan(&m.ID, &m.RoomID, &m.UserID, &m.ReplyToMessageID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt)
+	var dName *string
+	err := r.db.QueryRow(context.Background(), query, messageID).Scan(&m.ID, &m.RoomID, &m.UserID, &m.ReplyToMessageID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &dName)
 	if err != nil {
 		return nil, err
+	}
+	m.User = &domain.User{
+		ID: m.UserID,
+		DisplayName: COALESCE(dName, ""),
 	}
 	return &m, nil
 }
@@ -42,7 +51,7 @@ func (r *chatRepository) GetMessage(messageID string) (*domain.Message, error) {
 func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) {
 	query := `
 		SELECT id, room_id, user_id, reply_to_message_id, content, type, file_url, created_at, read_count, username, display_name, avatar_url,
-		       replied_id, replied_content, replied_type
+		       replied_id, replied_content, replied_type, replied_file_url, replied_user_id, replied_user_name
 		FROM (
 			SELECT m.id, m.room_id, 
 			       COALESCE(m.user_id::text, '') as user_id, 
@@ -63,10 +72,14 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 			       COALESCE(u.avatar_url, '') as avatar_url,
 			       replied.id as replied_id,
 			       replied.content as replied_content,
-			       replied.type as replied_type
+			       replied.type as replied_type,
+			       replied.file_url as replied_file_url,
+			       replied.user_id as replied_user_id,
+			       ru.display_name as replied_user_name
 			FROM messages m
 			LEFT JOIN users u ON m.user_id = u.id
 			LEFT JOIN messages replied ON m.reply_to_message_id = replied.id
+			LEFT JOIN users ru ON replied.user_id = ru.id
 			WHERE m.room_id = $1
 			ORDER BY m.created_at DESC
 			LIMIT $2 OFFSET $3
@@ -84,9 +97,9 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	for rows.Next() {
 		var m domain.Message
 		var u domain.User
-		var rID, rContent, rType *string
+		var rID, rContent, rType, rFileURL, rUserID, rUserName *string
 		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.ReplyToMessageID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &m.ReadCount,
-			&u.Username, &u.DisplayName, &u.AvatarURL, &rID, &rContent, &rType)
+			&u.Username, &u.DisplayName, &u.AvatarURL, &rID, &rContent, &rType, &rFileURL, &rUserID, &rUserName)
 		if err != nil {
 			log.Printf("[DATABASE] GetMessages Scan Error | room_id: %s | error: %v", roomID, err)
 			return nil, err
@@ -98,14 +111,31 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 			if rID == nil {
 				m.ReplyToMessage = &domain.Message{
 					ID: *m.ReplyToMessageID,
-					Content: "Deleted message",
-					Type: "text",
+					Content: "ข้อความนี้ถูกลบแล้ว",
+					Type: "deleted",
+					Preview: "ข้อความนี้ถูกลบแล้ว",
+					IsDeleted: true,
 				}
 			} else {
+				preview := ""
+				if COALESCE(rType, "text") == "image" {
+					preview = "รูปภาพ"
+				} else if COALESCE(rType, "text") == "file" {
+					preview = "ไฟล์แนบ"
+				} else {
+					preview = COALESCE(rContent, "")
+				}
+
 				m.ReplyToMessage = &domain.Message{
 					ID: *rID,
 					Content: COALESCE(rContent, ""),
 					Type: COALESCE(rType, "text"),
+					FileURL: COALESCE(rFileURL, ""),
+					Preview: preview,
+					User: &domain.User{
+						ID: COALESCE(rUserID, ""),
+						DisplayName: COALESCE(rUserName, ""),
+					},
 				}
 			}
 		}

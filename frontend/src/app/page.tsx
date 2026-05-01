@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Reply,
+  FileText,
 } from "lucide-react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatAutoScroll } from "@/hooks/useChatAutoScroll";
@@ -36,6 +37,66 @@ const FALLBACK_ROOM = {
   name: "General Chat",
   is_group: true,
   unread_count: 0,
+};
+
+const ReplyPreview = ({ 
+  message, 
+  onClick, 
+  onCancel, 
+  isBanner = false,
+  isMe = false 
+}: { 
+  message: Message, 
+  onClick?: () => void, 
+  onCancel?: () => void, 
+  isBanner?: boolean,
+  isMe?: boolean
+}) => {
+  const senderName = message.user?.display_name || message.user?.username || (message.sender === 'me' ? 'You' : 'User');
+  
+  return (
+    <div 
+      onClick={onClick}
+      className={`relative flex items-center gap-2 overflow-hidden ${onClick ? 'cursor-pointer' : ''} ${
+        isBanner 
+          ? "mb-2 justify-between rounded-t-lg bg-gray-50 px-3 py-2 text-sm border-l-4 border-[#06C755]" 
+          : `mb-1.5 rounded bg-black/5 p-1.5 text-xs ${isMe ? "border-l-2 border-white/50 text-white/90" : "border-l-2 border-[#06C755] text-gray-600"}`
+      }`}
+    >
+      <div className="flex flex-col overflow-hidden flex-1">
+        <span className={`font-semibold ${isBanner ? "text-[#06C755]" : (isMe ? "text-white/90" : "text-[#06C755]")}`}>
+          {isBanner ? `Replying to ${senderName}` : senderName}
+        </span>
+        <div className="flex items-center gap-1 opacity-80">
+          {message.is_deleted ? (
+            <span className="italic">ข้อความนี้ถูกลบแล้ว</span>
+          ) : message.type === 'image' ? (
+            <>
+              <ImageIcon size={12} className="shrink-0" />
+              <span className="truncate">{message.preview || 'รูปภาพ'}</span>
+            </>
+          ) : message.type === 'file' ? (
+            <>
+              <FileText size={12} className="shrink-0" />
+              <span className="truncate">{message.preview || 'ไฟล์แนบ'}</span>
+            </>
+          ) : (
+            <span className="truncate">{message.preview || message.content}</span>
+          )}
+        </div>
+      </div>
+      
+      {message.type === 'image' && message.file_url && !message.is_deleted && (
+        <img src={message.file_url} alt="preview" className="h-8 w-8 rounded object-cover shrink-0" />
+      )}
+
+      {isBanner && onCancel && (
+        <button onClick={(e) => { e.stopPropagation(); onCancel(); }} className="text-gray-400 hover:text-gray-600 p-1 shrink-0">
+          <X size={16} />
+        </button>
+      )}
+    </div>
+  );
 };
 
 function ChatContent() {
@@ -143,6 +204,19 @@ function ChatContent() {
       setReadersModal(prev => ({ ...prev, loading: false }));
     }
   };
+
+  const jumpToMessage = useCallback((messageId: string) => {
+    const element = document.getElementById(`message-${messageId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.classList.add("bg-[#06C755]/10", "transition-colors", "duration-500", "rounded-lg");
+      setTimeout(() => {
+        element.classList.remove("bg-[#06C755]/10");
+      }, 1500);
+    } else {
+      console.warn("Message not found in DOM for jump.");
+    }
+  }, []);
 
   useEffect(() => {
     const initUser = async () => {
@@ -498,9 +572,11 @@ function ChatContent() {
             return (
               <div
                 key={msg.id || index}
+                id={msg.id ? `message-${msg.id}` : undefined}
+                data-message-id={msg.id}
                 className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${
                   isMe ? "justify-end" : "justify-start"
-                } ${isNewSender ? "pt-3" : "pt-1"}`}
+                } ${isNewSender ? "pt-3" : "pt-1"} p-1`}
               >
                 <div
                   className={`relative flex max-w-[82%] flex-col md:max-w-[70%] ${
@@ -508,16 +584,18 @@ function ChatContent() {
                   }`}
                 >
                   <div
-                    className={`rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm ${
+                    className={`rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm transition-colors ${
                       isMe
                         ? "bg-[#06C755] text-white rounded-tr-[4px]"
                         : "bg-white text-gray-800 rounded-tl-[4px] border border-gray-100"
                     }`}
                   >
                     {msg.reply_to_message && (
-                      <div className={`mb-1.5 rounded bg-black/5 p-1.5 text-xs ${isMe ? "border-l-2 border-white/50 text-white/90" : "border-l-2 border-[#06C755] text-gray-600"}`}>
-                        {msg.reply_to_message.content}
-                      </div>
+                      <ReplyPreview 
+                        message={msg.reply_to_message} 
+                        isMe={isMe} 
+                        onClick={() => msg.reply_to_message?.id && jumpToMessage(msg.reply_to_message.id)} 
+                      />
                     )}
                     {msg.type === "image" ? (
                       <img
@@ -588,15 +666,11 @@ function ChatContent() {
           }}
         >
           {replyingToMessage && (
-            <div className="mb-2 flex items-center justify-between rounded-t-lg bg-gray-50 px-3 py-2 text-sm border-l-4 border-[#06C755]">
-              <div className="flex flex-col overflow-hidden">
-                <span className="font-semibold text-[#06C755]">Replying to {replyingToMessage.sender === 'me' ? 'yourself' : 'user'}</span>
-                <span className="truncate text-gray-500 text-xs">{replyingToMessage.content}</span>
-              </div>
-              <button onClick={() => setReplyingToMessage(null)} className="text-gray-400 hover:text-gray-600 p-1">
-                <X size={16} />
-              </button>
-            </div>
+            <ReplyPreview 
+              message={replyingToMessage} 
+              isBanner={true} 
+              onCancel={() => setReplyingToMessage(null)} 
+            />
           )}
           <div className={`flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 transition-all focus-within:border-[#06C755] md:gap-3 md:px-4 ${replyingToMessage ? 'rounded-tl-none rounded-tr-none border-t-0' : ''}`}>
             <input

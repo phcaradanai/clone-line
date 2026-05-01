@@ -119,8 +119,10 @@ func TestGetMessages_DeletedReplyPreview(t *testing.T) {
 					ReplyToMessageID: &replyID,
 					ReplyToMessage: &domain.Message{
 						ID: replyID,
-						Content: "Deleted message",
-						Type: "text",
+						Content: "ข้อความนี้ถูกลบแล้ว",
+						Type: "deleted",
+						Preview: "ข้อความนี้ถูกลบแล้ว",
+						IsDeleted: true,
 					},
 				},
 			}, nil
@@ -132,8 +134,8 @@ func TestGetMessages_DeletedReplyPreview(t *testing.T) {
 	if len(msgs) == 0 || msgs[0].ReplyToMessage == nil {
 		t.Fatal("expected reply to message to be populated")
 	}
-	if msgs[0].ReplyToMessage.Content != "Deleted message" {
-		t.Errorf("expected 'Deleted message', got %s", msgs[0].ReplyToMessage.Content)
+	if msgs[0].ReplyToMessage.Content != "ข้อความนี้ถูกลบแล้ว" {
+		t.Errorf("expected 'ข้อความนี้ถูกลบแล้ว', got %s", msgs[0].ReplyToMessage.Content)
 	}
 }
 

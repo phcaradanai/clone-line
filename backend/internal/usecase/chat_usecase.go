@@ -33,6 +33,17 @@ func (u *chatUsecase) SendMessage(msg *domain.Message) error {
 		if repliedMsg.RoomID != msg.RoomID {
 			return domain.ValidationError{Message: "replied message belongs to a different room"}
 		}
+
+		preview := ""
+		if repliedMsg.Type == "image" {
+			preview = "รูปภาพ"
+		} else if repliedMsg.Type == "file" {
+			preview = "ไฟล์แนบ"
+		} else {
+			preview = repliedMsg.Content
+		}
+		repliedMsg.Preview = preview
+		msg.ReplyToMessage = repliedMsg
 	}
 
 	err := u.repo.SaveMessage(msg)
