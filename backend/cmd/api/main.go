@@ -250,10 +250,6 @@ func main() {
 		}
 
 		// Wrapper to capture status code
-		type statusWriter struct {
-			http.ResponseWriter
-			status int
-		}
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
 		mux.ServeHTTP(sw, r)
@@ -265,6 +261,11 @@ func main() {
 	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		log.Fatal(err)
 	}
+}
+
+type statusWriter struct {
+	http.ResponseWriter
+	status int
 }
 
 func (sw *statusWriter) WriteHeader(status int) {
