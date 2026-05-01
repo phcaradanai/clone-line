@@ -14,15 +14,17 @@ import {
   MoreVertical,
   Search,
   ChevronDown,
+  Menu,
+  X,
 } from "lucide-react";
-import { useChat } from "@/hooks/useChat";
+import { useChat, type Message } from "@/hooks/useChat";
 import { useChatAutoScroll } from "@/hooks/useChatAutoScroll";
 import { useIsMobile } from "@/hooks/useIsMobile";
 import { useVisualViewportResize } from "@/hooks/useVisualViewportResize";
 import { useReadReceipt } from "@/hooks/useReadReceipt";
 import { useUnreadBadge } from "@/hooks/useUnreadBadge";
 import { useDocumentTitleUnread } from "@/hooks/useDocumentTitleUnread";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 
 const USER1_ID = "00000000-0000-0000-0000-000000000001";
 const USER2_ID = "00000000-0000-0000-0000-000000000003";
@@ -45,11 +47,13 @@ function ChatContent() {
   }[]>([]);
   const [selectedRoomId, setSelectedRoomId] = useState<string>("00000000-0000-0000-0000-000000000002");
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const searchParams = useSearchParams();
+  const router = useRouter();
   const isMobile = useIsMobile();
 
   // 1. Fetch Rooms
@@ -90,6 +94,16 @@ function ChatContent() {
 
     fetchRooms();
   }, [currentUser, searchParams]);
+
+  const handleRoomSelect = useCallback((roomId: string) => {
+    setSelectedRoomId(roomId);
+    setIsSidebarOpen(false);
+    
+    // Update URL
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("room", roomId);
+    router.push(`?${params.toString()}`);
+  }, [searchParams, router]);
 
   const roomId = selectedRoomId;
   const selectedRoom = rooms.find(r => r.id === roomId);
@@ -146,6 +160,22 @@ function ChatContent() {
 
   const userId = currentUser?.id || USER1_ID;
 
+  const handleGlobalMessage = useCallback((msg: Message) => {
+    setRooms(prev => prev.map(room => {
+      if (room.id === msg.room_id) {
+        return {
+          ...room,
+          last_message: {
+            content: msg.content,
+            created_at: msg.created_at || new Date().toISOString()
+          },
+          unread_count: room.id === roomId ? room.unread_count : room.unread_count + 1
+        };
+      }
+      return room;
+    }));
+  }, [roomId]);
+
   const { 
     messages, 
     sendMessage, 
@@ -157,7 +187,8 @@ function ChatContent() {
     messagesError
   } = useChat(
     roomId,
-    userId
+    userId,
+    handleGlobalMessage
   );
 
   const {
@@ -265,10 +296,64 @@ function ChatContent() {
     }
   };
 
+  const renderRoomList = () => (
+    <div className="flex-1 overflow-y-auto">
+      {isLoadingRooms ? (
+        <div className="p-4 text-center text-sm text-gray-400">กำลังโหลดห้อง...</div>
+      ) : rooms.length === 0 ? (
+        <div className="p-4 text-center text-sm text-gray-400">ไม่มีห้องแชท</div>
+      ) : (
+        rooms.map((room) => (
+          <div
+            key={room.id}
+            onClick={() => handleRoomSelect(room.id)}
+            className={`flex cursor-pointer items-center border-b border-gray-50 p-3 transition-colors ${room.id === roomId ? "bg-green-50" : "hover:bg-gray-50"
+              }`}
+          >
+            <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#06C755] font-bold uppercase text-white">
+              {room.name?.substring(0, 2) || "RM"}
+            </div>
+
+            <div className="flex-1 overflow-hidden">
+              <div className="flex items-center justify-between">
+                <span className={`truncate font-semibold ${room.id === roomId ? "text-[#06C755]" : "text-gray-800"}`}>
+                  {room.name}
+                </span>
+                <span className="text-[10px] text-gray-400">
+                  {room.last_message ? new Date(room.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <p className="truncate text-sm text-gray-500">
+                  {room.last_message ? room.last_message.content : (room.id === roomId && isConnected ? "Connected" : "")}
+                </p>
+                {room.unread_count > 0 && (
+                  <span className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#06C755] px-1.5 text-[10px] font-bold text-white">
+                    {room.unread_count}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
   return (
     <div className="fixed inset-0 flex overflow-hidden bg-[#F0F2F5] font-sans antialiased text-gray-900">
-      {/* Sidebar - Desktop Only */}
-      <aside className="hidden w-80 shrink-0 flex-col border-r border-gray-200 bg-white md:flex">
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-black/50 transition-opacity md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar / Drawer */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 transform bg-white transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+      } flex flex-col border-r border-gray-200`}>
         <div className="flex shrink-0 items-center justify-between border-b border-gray-100 bg-[#f7f9fa] p-4">
           <div>
             <h1 className="text-xl font-bold text-[#06C755]">LINE Clone</h1>
@@ -276,17 +361,12 @@ function ChatContent() {
               Logged in as: {currentUser?.username || "Guest"}
             </p>
           </div>
-
-          <div className="flex items-center space-x-2">
-            <div
-              className={`h-2 w-2 rounded-full ${isConnected ? "bg-green-500" : "bg-red-500"
-                }`}
-            />
-            <MoreVertical
-              className="cursor-pointer text-gray-500"
-              size={20}
-            />
-          </div>
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="md:hidden"
+          >
+            <X size={20} className="text-gray-400" />
+          </button>
         </div>
 
         <div className="shrink-0 p-3">
@@ -302,49 +382,7 @@ function ChatContent() {
             />
           </div>
         </div>
-
-        <div className="flex-1 overflow-y-auto">
-          {isLoadingRooms ? (
-             <div className="p-4 text-center text-sm text-gray-400">กำลังโหลดห้อง...</div>
-          ) : rooms.length === 0 ? (
-             <div className="p-4 text-center text-sm text-gray-400">ไม่มีห้องแชท</div>
-          ) : (
-            rooms.map((room) => (
-              <div 
-                key={room.id}
-                onClick={() => setSelectedRoomId(room.id)}
-                className={`flex cursor-pointer items-center border-b border-gray-50 p-3 transition-colors ${
-                  room.id === roomId ? "bg-green-50" : "hover:bg-gray-50"
-                }`}
-              >
-                <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#06C755] font-bold text-white uppercase">
-                  {room.name?.substring(0, 2) || "RM"}
-                </div>
-
-                <div className="flex-1 overflow-hidden">
-                  <div className="flex items-center justify-between">
-                    <span className={`font-semibold truncate ${room.id === roomId ? "text-[#06C755]" : "text-gray-800"}`}>
-                      {room.name}
-                    </span>
-                    <span className="text-[10px] text-gray-400">
-                      {room.last_message ? new Date(room.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <p className="truncate text-sm text-gray-500">
-                      {room.last_message ? room.last_message.content : (room.id === roomId && isConnected ? "Connected" : "")}
-                    </p>
-                    {room.unread_count > 0 && (
-                      <span className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#06C755] px-1.5 text-[10px] font-bold text-white">
-                        {room.unread_count}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+        {renderRoomList()}
       </aside>
 
       {/* Main Chat Area */}
@@ -352,12 +390,18 @@ function ChatContent() {
         {/* Chat Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex items-center">
-            <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#06C755] text-xs font-bold text-white uppercase">
-              {selectedRoom?.name?.substring(0, 2) || "RM"}
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="mr-3 md:hidden"
+            >
+              <Menu size={24} className="text-gray-500" />
+            </button>
+            <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#06C755] text-xs font-bold uppercase text-white">
+              {selectedRoom?.name?.substring(0, 2) || (isLoadingRooms ? ".." : "RM")}
             </div>
             <div>
               <h2 className="text-base font-bold text-gray-800">
-                {selectedRoom?.name || "เลือกห้องแชท"}
+                {isLoadingRooms ? "กำลังโหลดห้อง..." : (selectedRoom?.name || "เลือกห้องแชท")}
               </h2>
               <p className="text-xs text-gray-400">
                 {isConnected ? "Online" : "Offline"}

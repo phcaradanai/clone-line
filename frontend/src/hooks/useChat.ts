@@ -12,11 +12,12 @@ export type Message = {
   time?: string;
   sender?: 'me' | 'other';
   read_count?: number;
+  created_at?: string;
 };
 
 export type MessageSource = 'sent' | 'received' | null;
 
-export function useChat(roomId: string, userId: string) {
+export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Message) => void) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -122,15 +123,15 @@ export function useChat(roomId: string, userId: string) {
         const data = JSON.parse(event.data);
         
         if (data.type === 'message:read') {
-          const { lastReadMessageId, userId: readerId } = data.payload;
-          // If the other user read our messages
-          if (readerId !== userId) {
+          const { lastReadMessageId, userId: readerId, roomId: eventRoomId } = data.payload;
+          
+          // Only apply read receipt if it's for the current room
+          if (eventRoomId === roomId && readerId !== userId) {
             setMessages((prev) => {
               const readIndex = prev.findIndex(m => m.id === lastReadMessageId);
               if (readIndex === -1) return prev;
               
               return prev.map((msg, index) => {
-                // All messages up to the read index are considered read
                 if (msg.sender === 'me' && index <= readIndex) {
                   return { ...msg, read_count: Math.max(msg.read_count || 0, 1) };
                 }
@@ -142,23 +143,29 @@ export function useChat(roomId: string, userId: string) {
         }
 
         // Transform incoming message
-
         const incomingMsg: Message = {
           ...data,
           sender: data.user_id === userId ? 'me' : 'other',
           time: new Date(data.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-        
-        setMessages((prev) => {
-          // Prevent duplicates if message has an ID
-          if (incomingMsg.id && prev.some(m => m.id === incomingMsg.id)) {
-            return prev;
-          }
-          setLastMessageSource(incomingMsg.sender === 'me' ? 'sent' : 'received');
-          return [...prev, incomingMsg];
-        });
-      } catch (e) {
 
+        // Global callback for all incoming messages (useful for sidebar unread counts)
+        if (onNewMessage) {
+          onNewMessage(incomingMsg);
+        }
+        
+        // Only add to message list if it's for the current room
+        if (incomingMsg.room_id === roomId) {
+          setMessages((prev) => {
+            // Prevent duplicates
+            if (incomingMsg.id && prev.some(m => m.id === incomingMsg.id)) {
+              return prev;
+            }
+            setLastMessageSource(incomingMsg.sender === 'me' ? 'sent' : 'received');
+            return [...prev, incomingMsg];
+          });
+        }
+      } catch (e) {
         console.error('Failed to parse message', e);
       }
     };
@@ -171,7 +178,7 @@ export function useChat(roomId: string, userId: string) {
     return () => {
       socket.close();
     };
-  }, [roomId, userId]);
+  }, [roomId, userId, onNewMessage]);
 
   const sendMessage = useCallback((content: string, type: 'text' | 'image' = 'text', fileUrl?: string) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
