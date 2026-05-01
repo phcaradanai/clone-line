@@ -11,7 +11,7 @@ export type Message = {
   file_url?: string;
   time?: string;
   sender?: 'me' | 'other';
-  read_at?: string;
+  read_count?: number;
 };
 
 export type MessageSource = 'sent' | 'received' | null;
@@ -21,10 +21,11 @@ export function useChat(roomId: string, userId: string) {
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<WebSocket | null>(null);
   const [lastMessageSource, setLastMessageSource] = useState<MessageSource>(null);
+  const [initialUnreadCount, setInitialUnreadCount] = useState(0);
 
   useEffect(() => {
-    // 1. Load History
-    const loadHistory = async () => {
+    // 1. Load History & Unread Count
+    const loadInitialData = async () => {
       try {
         let baseUrl = `http://${window.location.hostname}:8888`;
         const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -32,23 +33,34 @@ export function useChat(roomId: string, userId: string) {
           baseUrl = envBackendUrl;
         }
         
+        // Load messages
         const response = await fetch(`${baseUrl}/messages?room_id=${roomId}`);
         const data = await response.json();
         
         if (Array.isArray(data)) {
-          const formattedMessages = data.reverse().map((msg: any) => ({
+          const formattedMessages: Message[] = data.reverse().map((msg: Message & { created_at: string, read_count: number }) => ({
             ...msg,
-            sender: msg.user_id === userId ? 'me' : 'other',
-            time: new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            sender: (msg.user_id === userId ? 'me' : 'other') as 'me' | 'other',
+            time: new Date(msg.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            read_count: msg.read_count || 0
           }));
+
           setMessages(formattedMessages);
         }
+
+        // Load unread count
+        const unreadResponse = await fetch(`${baseUrl}/unread?room_id=${roomId}&user_id=${userId}`);
+        const unreadData = await unreadResponse.json();
+        if (unreadData && typeof unreadData.count === 'number') {
+          setInitialUnreadCount(unreadData.count);
+        }
       } catch (error) {
-        console.error("Failed to load history", error);
+        console.error("Failed to load initial data", error);
       }
     };
 
-    loadHistory();
+    loadInitialData();
+
 
     // 2. Setup WebSocket
     const isSecure = window.location.protocol === 'https:';
@@ -84,31 +96,43 @@ export function useChat(roomId: string, userId: string) {
         const data = JSON.parse(event.data);
         
         if (data.type === 'message:read') {
-          const { lastReadMessageId, readAt, userId: readerId } = data.payload;
+          const { lastReadMessageId, userId: readerId } = data.payload;
           // If the other user read our messages
           if (readerId !== userId) {
-            setMessages((prev) => 
-              prev.map((msg) => {
-                // If message is ours and older or equal to lastReadMessageId, and not already read
-                if (msg.sender === 'me' && !msg.read_at && msg.id && msg.id <= lastReadMessageId) {
-                  return { ...msg, read_at: readAt };
+            setMessages((prev) => {
+              const readIndex = prev.findIndex(m => m.id === lastReadMessageId);
+              if (readIndex === -1) return prev;
+              
+              return prev.map((msg, index) => {
+                // All messages up to the read index are considered read
+                if (msg.sender === 'me' && index <= readIndex) {
+                  return { ...msg, read_count: Math.max(msg.read_count || 0, 1) };
                 }
                 return msg;
-              })
-            );
+              });
+            });
           }
           return;
         }
 
         // Transform incoming message
+
         const incomingMsg: Message = {
           ...data,
           sender: data.user_id === userId ? 'me' : 'other',
           time: new Date(data.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
-        setLastMessageSource(incomingMsg.sender === 'me' ? 'sent' : 'received');
-        setMessages((prev) => [...prev, incomingMsg]);
+        
+        setMessages((prev) => {
+          // Prevent duplicates if message has an ID
+          if (incomingMsg.id && prev.some(m => m.id === incomingMsg.id)) {
+            return prev;
+          }
+          setLastMessageSource(incomingMsg.sender === 'me' ? 'sent' : 'received');
+          return [...prev, incomingMsg];
+        });
       } catch (e) {
+
         console.error('Failed to parse message', e);
       }
     };
@@ -152,6 +176,7 @@ export function useChat(roomId: string, userId: string) {
     }
   }, [roomId, userId]);
 
-  return { messages, isConnected, sendMessage, sendReadReceipt, lastMessageSource };
+  return { messages, isConnected, sendMessage, sendReadReceipt, lastMessageSource, initialUnreadCount };
 }
+
 

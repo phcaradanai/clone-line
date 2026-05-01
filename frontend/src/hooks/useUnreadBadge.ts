@@ -8,9 +8,17 @@ import type { Message } from "./useChat";
  * Increments when new messages arrive from others while user is not at bottom or tab is hidden.
  * Resets when user reads (at bottom and tab visible).
  */
-export function useUnreadBadge(messages: Message[], isAtBottom: boolean) {
+export function useUnreadBadge(messages: Message[], isAtBottom: boolean, initialCount: number = 0) {
   const [unreadCount, setUnreadCount] = useState(0);
   const prevMessageCountRef = useRef(messages.length);
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!initializedRef.current && initialCount > 0) {
+      setUnreadCount(initialCount);
+      initializedRef.current = true;
+    }
+  }, [initialCount]);
 
   useEffect(() => {
     if (typeof document === "undefined") return;

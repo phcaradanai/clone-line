@@ -10,12 +10,16 @@ const MOBILE_BREAKPOINT = 768;
  * Returns false during SSR to avoid hydration mismatch.
  */
 export function useIsMobile(): boolean {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`).matches;
+    }
+    return false;
+  });
 
   useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT}px)`);
-    setIsMobile(mql.matches);
-
+    
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
     mql.addEventListener("change", handler);
     return () => mql.removeEventListener("change", handler);
@@ -23,3 +27,4 @@ export function useIsMobile(): boolean {
 
   return isMobile;
 }
+

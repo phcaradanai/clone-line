@@ -94,7 +94,14 @@ function ChatContent() {
 
   const userId = currentUser?.id || USER1_ID;
 
-  const { messages, sendMessage, sendReadReceipt, isConnected, lastMessageSource } = useChat(
+  const { 
+    messages, 
+    sendMessage, 
+    sendReadReceipt, 
+    isConnected, 
+    lastMessageSource,
+    initialUnreadCount 
+  } = useChat(
     roomId,
     userId
   );
@@ -110,7 +117,7 @@ function ChatContent() {
 
   // Read receipts & Unread notifications
   useReadReceipt(messages, userId, sendReadReceipt, isNearBottom);
-  const unreadCount = useUnreadBadge(messages, isNearBottom);
+  const unreadCount = useUnreadBadge(messages, isNearBottom, initialUnreadCount);
   useDocumentTitleUnread(unreadCount);
 
   const handleViewportResize = useCallback(() => {
@@ -329,10 +336,13 @@ function ChatContent() {
                 )}
 
                 <div className={`mt-1 flex items-center gap-1 ${msg.sender === "me" ? "justify-end" : "justify-start"}`}>
-                  {msg.sender === "me" && msg.read_at && (
-                    <span className="text-[10px] text-green-100">Read</span>
+                  {msg.sender === "me" && (msg.read_count || 0) > 0 && (
+                    <span className="text-[10px] text-green-100">
+                      Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
+                    </span>
                   )}
                   <span
+
                     className={`block text-[10px] ${msg.sender === "me"
                         ? "text-green-100"
                         : "text-gray-400"

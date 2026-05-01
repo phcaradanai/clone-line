@@ -9,7 +9,10 @@ type ChatUsecase interface {
 	GetChatHistory(roomID string, limit, offset int) ([]domain.Message, error)
 	GetUserRooms(userID string) ([]domain.Room, error)
 	RegisterUser(user *domain.User) error
+	MarkAsRead(roomID string, userID string, lastReadMessageID string) error
+	GetUnreadCount(roomID string, userID string) (int, error)
 }
+
 
 type chatUsecase struct {
 	repo domain.ChatRepository
@@ -35,3 +38,12 @@ func (u *chatUsecase) GetUserRooms(userID string) ([]domain.Room, error) {
 func (u *chatUsecase) RegisterUser(user *domain.User) error {
 	return u.repo.RegisterUser(user)
 }
+
+func (u *chatUsecase) MarkAsRead(roomID string, userID string, lastReadMessageID string) error {
+	return u.repo.MarkAsRead(roomID, userID, lastReadMessageID)
+}
+
+func (u *chatUsecase) GetUnreadCount(roomID string, userID string) (int, error) {
+	return u.repo.GetUnreadCount(roomID, userID)
+}
+

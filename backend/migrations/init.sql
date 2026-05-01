@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS room_members (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_read_message_id UUID,
+    last_read_at TIMESTAMP WITH TIME ZONE,
     PRIMARY KEY (room_id, user_id)
 );
 

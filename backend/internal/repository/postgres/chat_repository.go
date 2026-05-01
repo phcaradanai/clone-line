@@ -29,6 +29,12 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	          m.type, 
 	          COALESCE(m.file_url, ''), 
 	          m.created_at,
+	          (SELECT COUNT(rm.user_id) 
+	           FROM room_members rm 
+	           JOIN messages m_read ON rm.last_read_message_id = m_read.id
+	           WHERE rm.room_id = m.room_id 
+	           AND rm.user_id != m.user_id 
+	           AND m_read.created_at >= m.created_at) as read_count,
 	          COALESCE(u.username, 'anonymous'), 
 	          COALESCE(u.display_name, 'Unknown User'), 
 	          COALESCE(u.avatar_url, '')
@@ -48,7 +54,7 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	for rows.Next() {
 		var m domain.Message
 		var u domain.User
-		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt,
+		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &m.ReadCount,
 			&u.Username, &u.DisplayName, &u.AvatarURL)
 		if err != nil {
 			return nil, err
@@ -60,10 +66,45 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	return messages, nil
 }
 
+func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessageID string) error {
+	query := `UPDATE room_members 
+	          SET last_read_message_id = $1, last_read_at = NOW() 
+	          WHERE room_id = $2 AND user_id = $3`
+	_, err := r.db.Exec(context.Background(), query, lastReadMessageID, roomID, userID)
+	return err
+}
+
+func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, error) {
+	query := `SELECT COUNT(*) 
+	          FROM messages m
+	          JOIN room_members rm ON m.room_id = rm.room_id
+	          LEFT JOIN messages m_read ON m_read.id = rm.last_read_message_id
+	          WHERE rm.room_id = $1 AND rm.user_id = $2
+	          AND (rm.last_read_message_id IS NULL OR m.created_at > m_read.created_at)
+	          AND m.user_id != $2`
+	
+	var count int
+	err := r.db.QueryRow(context.Background(), query, roomID, userID).Scan(&count)
+	return count, err
+}
+
 func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
-	query := `SELECT r.id, r.name, r.is_group, r.created_at
+	query := `SELECT r.id, r.name, r.is_group, r.created_at, rm.last_read_message_id, rm.last_read_at,
+	          (SELECT COUNT(*) FROM messages m 
+	           LEFT JOIN messages m_read ON m_read.id = rm.last_read_message_id
+	           WHERE m.room_id = r.id 
+	           AND m.user_id != $1
+	           AND (rm.last_read_message_id IS NULL OR m.created_at > m_read.created_at)) as unread_count,
+	          lm.id, lm.content, lm.type, lm.created_at
 	          FROM rooms r
 	          JOIN room_members rm ON r.id = rm.room_id
+	          LEFT JOIN LATERAL (
+	             SELECT id, content, type, created_at
+	             FROM messages
+	             WHERE room_id = r.id
+	             ORDER BY created_at DESC
+	             LIMIT 1
+	          ) lm ON true
 	          WHERE rm.user_id = $1
 	          ORDER BY r.created_at DESC`
 	
@@ -76,26 +117,67 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	var rooms []domain.Room
 	for rows.Next() {
 		var rm domain.Room
-		if err := rows.Scan(&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt); err != nil {
+		var lm domain.Message
+		var lmID, lmContent, lmType *string
+		var lmCreatedAt *time.Time
+		
+		if err := rows.Scan(&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt, &rm.LastReadMessageID, &rm.LastReadAt, &rm.UnreadCount, &lmID, &lmContent, &lmType, &lmCreatedAt); err != nil {
 			return nil, err
 		}
+		
+		if lmID != nil {
+			lm.ID = *lmID
+			lm.Content = *lmContent
+			lm.Type = *lmType
+			lm.CreatedAt = *lmCreatedAt
+			rm.LastMessage = &lm
+		}
+		
 		rooms = append(rooms, rm)
 	}
 	return rooms, nil
 }
 
+
 func (r *chatRepository) GetRoom(roomID string) (*domain.Room, error) {
-	// Implementation omitted for brevity
-	return nil, nil
+	query := `SELECT id, name, is_group, created_at FROM rooms WHERE id = $1`
+	var rm domain.Room
+	err := r.db.QueryRow(context.Background(), query, roomID).Scan(&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &rm, nil
 }
 
 func (r *chatRepository) CreateRoom(room *domain.Room, memberIDs []string) error {
-	// Implementation omitted for brevity
-	return nil
+	ctx := context.Background()
+	tx, err := r.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	queryRoom := `INSERT INTO rooms (name, is_group) VALUES ($1, $2) RETURNING id, created_at`
+	err = tx.QueryRow(ctx, queryRoom, room.Name, room.IsGroup).Scan(&room.ID, &room.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	queryMember := `INSERT INTO room_members (room_id, user_id) VALUES ($1, $2)`
+	for _, mID := range memberIDs {
+		_, err = tx.Exec(ctx, queryMember, room.ID, mID)
+		if err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }
+
 
 func (r *chatRepository) RegisterUser(user *domain.User) error {
 	query := `INSERT INTO users (username, display_name) VALUES ($1, $2) RETURNING id, created_at`
 	return r.db.QueryRow(context.Background(), query, user.Username, user.DisplayName).
 		Scan(&user.ID, &user.CreatedAt)
 }
+

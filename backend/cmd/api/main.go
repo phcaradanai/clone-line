@@ -144,6 +144,38 @@ func main() {
 		json.NewEncoder(w).Encode(user)
 	})
 
+	mux.HandleFunc("/unread", func(w http.ResponseWriter, r *http.Request) {
+		roomID := r.URL.Query().Get("room_id")
+		userID := r.URL.Query().Get("user_id")
+		if roomID == "" || userID == "" {
+			http.Error(w, "room_id and user_id are required", http.StatusBadRequest)
+			return
+		}
+		count, err := chatUsecase.GetUnreadCount(roomID, userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]int{"count": count})
+	})
+
+	mux.HandleFunc("/rooms", func(w http.ResponseWriter, r *http.Request) {
+		userID := r.URL.Query().Get("user_id")
+		if userID == "" {
+			http.Error(w, "user_id is required", http.StatusBadRequest)
+			return
+		}
+		rooms, err := chatUsecase.GetUserRooms(userID)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(rooms)
+	})
+
+
 	port := os.Getenv("PORT")
 	if port == "" { port = "8888" }
 

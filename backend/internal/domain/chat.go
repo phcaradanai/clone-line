@@ -19,7 +19,12 @@ type Room struct {
 	IsGroup   bool      `json:"is_group"`
 	CreatedAt time.Time `json:"created_at"`
 	Members   []User    `json:"members,omitempty"`
+	UnreadCount int     `json:"unread_count"`
+	LastMessage *Message `json:"last_message,omitempty"`
+	LastReadMessageID *string `json:"last_read_message_id,omitempty"`
+	LastReadAt *time.Time `json:"last_read_at,omitempty"`
 }
+
 
 type Message struct {
 	ID        string    `json:"id"`
@@ -29,6 +34,7 @@ type Message struct {
 	Type      string    `json:"type"` // text, image, file
 	FileURL   string    `json:"file_url,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
+	ReadCount int       `json:"read_count"`
 	User      *User     `json:"user,omitempty"`
 }
 
@@ -39,4 +45,7 @@ type ChatRepository interface {
 	GetRoom(roomID string) (*Room, error)
 	CreateRoom(room *Room, memberIDs []string) error
 	RegisterUser(user *User) error
+	MarkAsRead(roomID string, userID string, lastReadMessageID string) error
+	GetUnreadCount(roomID string, userID string) (int, error)
 }
+

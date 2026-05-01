@@ -59,7 +59,32 @@ func (c *Client) readPump() {
 			break
 		}
 
-		// Parse and save message
+		// Parse and handle event
+		var event struct {
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
+		}
+		
+		if err := json.Unmarshal(message, &event); err == nil && event.Type == "message:read" {
+			var payload struct {
+				RoomID            string `json:"roomId"`
+				UserID            string `json:"userId"`
+				LastReadMessageID string `json:"lastReadMessageId"`
+				ReadAt            string `json:"readAt"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err == nil {
+				// Update persistence
+				err := c.Usecase.MarkAsRead(payload.RoomID, payload.UserID, payload.LastReadMessageID)
+				if err != nil {
+					log.Printf("Warning: Failed to mark as read: %v", err)
+				}
+				// Broadcast the read receipt to others in the room
+				c.Hub.broadcast <- message
+			}
+			continue
+		}
+
+		// Otherwise, handle as a regular message
 		var msg domain.Message
 		if err := json.Unmarshal(message, &msg); err == nil {
 			if msg.UserID == "" {
@@ -79,6 +104,7 @@ func (c *Client) readPump() {
 			log.Printf("Received non-JSON message or invalid format: %s", string(message))
 			c.Hub.broadcast <- message
 		}
+
 	}
 }
 
