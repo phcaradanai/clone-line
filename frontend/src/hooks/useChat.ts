@@ -19,13 +19,19 @@ export type MessageSource = 'sent' | 'received' | null;
 export function useChat(roomId: string, userId: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [messagesError, setMessagesError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const [lastMessageSource, setLastMessageSource] = useState<MessageSource>(null);
   const [initialUnreadCount, setInitialUnreadCount] = useState(0);
 
   useEffect(() => {
+    // Reset state when roomId changes - using functional updates or allowing async flow
     // 1. Load History & Unread Count
     const loadInitialData = async () => {
+      setMessages([]);
+      setMessagesError(null);
+      setIsLoadingMessages(true);
       try {
         let baseUrl = `http://${window.location.hostname}:8888`;
         const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -35,27 +41,47 @@ export function useChat(roomId: string, userId: string) {
         
         // Load messages
         const response = await fetch(`${baseUrl}/messages?room_id=${roomId}`);
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         if (Array.isArray(data)) {
-          const formattedMessages: Message[] = data.reverse().map((msg: Message & { created_at: string, read_count: number }) => ({
+          const formattedMessages: Message[] = data.map((msg: Message & { created_at: string, read_count: number }) => ({
             ...msg,
             sender: (msg.user_id === userId ? 'me' : 'other') as 'me' | 'other',
             time: new Date(msg.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             read_count: msg.read_count || 0
           }));
 
-          setMessages(formattedMessages);
+          setMessages((prev) => {
+            // Merge history with any real-time messages that arrived while loading
+            const merged = [...formattedMessages];
+            prev.forEach(pMsg => {
+               if (pMsg.id && !merged.some(m => m.id === pMsg.id)) {
+                 merged.push(pMsg);
+               }
+            });
+            // Re-sort by ID or index if needed, but history is already ASC and WS appends to end
+            return merged;
+          });
         }
+        setIsLoadingMessages(false);
 
         // Load unread count
         const unreadResponse = await fetch(`${baseUrl}/unread?room_id=${roomId}&user_id=${userId}`);
-        const unreadData = await unreadResponse.json();
-        if (unreadData && typeof unreadData.count === 'number') {
-          setInitialUnreadCount(unreadData.count);
+        if (unreadResponse.ok) {
+          const unreadData = await unreadResponse.json();
+          if (unreadData && typeof unreadData.count === 'number') {
+            setInitialUnreadCount(unreadData.count);
+          }
         }
-      } catch (error) {
-        console.error("Failed to load initial data", error);
+      } catch (error: unknown) {
+        console.error("Failed to load initial data:", error);
+        setMessagesError(error instanceof Error ? error.message : "Failed to load messages");
+        setIsLoadingMessages(false);
       }
     };
 
@@ -176,7 +202,16 @@ export function useChat(roomId: string, userId: string) {
     }
   }, [roomId, userId]);
 
-  return { messages, isConnected, sendMessage, sendReadReceipt, lastMessageSource, initialUnreadCount };
+  return { 
+    messages, 
+    isConnected, 
+    sendMessage, 
+    sendReadReceipt, 
+    lastMessageSource, 
+    initialUnreadCount,
+    isLoadingMessages,
+    messagesError
+  };
 }
 
 

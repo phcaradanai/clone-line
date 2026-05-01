@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -24,29 +25,36 @@ func (r *chatRepository) SaveMessage(msg *domain.Message) error {
 }
 
 func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) {
-	query := `SELECT m.id, m.room_id, 
-	          COALESCE(m.user_id::text, ''), 
-	          COALESCE(m.content, ''), 
-	          m.type, 
-	          COALESCE(m.file_url, ''), 
-	          m.created_at,
-	          (SELECT COUNT(rm.user_id) 
-	           FROM room_members rm 
-	           JOIN messages m_read ON rm.last_read_message_id = m_read.id
-	           WHERE rm.room_id = m.room_id 
-	           AND rm.user_id != m.user_id 
-	           AND m_read.created_at >= m.created_at) as read_count,
-	          COALESCE(u.username, 'anonymous'), 
-	          COALESCE(u.display_name, 'Unknown User'), 
-	          COALESCE(u.avatar_url, '')
-	          FROM messages m
-	          LEFT JOIN users u ON m.user_id = u.id
-	          WHERE m.room_id = $1
-	          ORDER BY m.created_at DESC
-	          LIMIT $2 OFFSET $3`
+	// Subquery to get the latest messages first, then order them ASC for the client
+	query := `
+		SELECT id, room_id, user_id, content, type, file_url, created_at, read_count, username, display_name, avatar_url
+		FROM (
+			SELECT m.id, m.room_id, 
+			       COALESCE(m.user_id::text, '') as user_id, 
+			       COALESCE(m.content, '') as content, 
+			       m.type, 
+			       COALESCE(m.file_url, '') as file_url, 
+			       m.created_at,
+			       (SELECT COUNT(rm.user_id) 
+			        FROM room_members rm 
+			        JOIN messages m_read ON rm.last_read_message_id = m_read.id
+			        WHERE rm.room_id = m.room_id 
+			        AND rm.user_id != m.user_id 
+			        AND m_read.created_at >= m.created_at) as read_count,
+			       COALESCE(u.username, 'anonymous') as username, 
+			       COALESCE(u.display_name, 'Unknown User') as display_name, 
+			       COALESCE(u.avatar_url, '') as avatar_url
+			FROM messages m
+			LEFT JOIN users u ON m.user_id = u.id
+			WHERE m.room_id = $1
+			ORDER BY m.created_at DESC
+			LIMIT $2 OFFSET $3
+		) sub
+		ORDER BY created_at ASC, id ASC`
 	
 	rows, err := r.db.Query(context.Background(), query, roomID, limit, offset)
 	if err != nil {
+		log.Printf("ERROR: GetMessages Query failed (room_id: %s): %v", roomID, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -58,6 +66,7 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &m.ReadCount,
 			&u.Username, &u.DisplayName, &u.AvatarURL)
 		if err != nil {
+			log.Printf("ERROR: GetMessages Scan failed: %v", err)
 			return nil, err
 		}
 		u.ID = m.UserID

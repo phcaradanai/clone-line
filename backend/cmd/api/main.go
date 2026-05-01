@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	deliveryHttp "github.com/phcar/chat-app-backend/internal/delivery/http"
 	"github.com/phcar/chat-app-backend/internal/delivery/ws"
@@ -111,15 +112,33 @@ func main() {
 
 	// Chat History endpoint
 	mux.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
+		// Support both room_id and roomId
 		roomID := r.URL.Query().Get("room_id")
 		if roomID == "" {
-			http.Error(w, "room_id is required", http.StatusBadRequest)
+			roomID = r.URL.Query().Get("roomId")
+		}
+
+		if roomID == "" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "room_id is required"})
+			return
+		}
+
+		// Validate UUID
+		if _, err := uuid.Parse(roomID); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid room_id"})
 			return
 		}
 		
-		messages, err := chatUsecase.GetChatHistory(roomID, 50, 0) // ดึง 50 ข้อความล่าสุด
+		messages, err := chatUsecase.GetChatHistory(roomID, 50, 0)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("ERROR: Failed to fetch chat history for room %s: %v", roomID, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 			return
 		}
 		

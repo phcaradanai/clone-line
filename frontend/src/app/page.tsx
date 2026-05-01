@@ -33,6 +33,18 @@ function ChatContent() {
     id: string;
     username: string;
   } | null>(null);
+  const [rooms, setRooms] = useState<{
+    id: string;
+    name: string;
+    is_group: boolean;
+    unread_count: number;
+    last_message?: {
+      content: string;
+      created_at: string;
+    };
+  }[]>([]);
+  const [selectedRoomId, setSelectedRoomId] = useState<string>("00000000-0000-0000-0000-000000000002");
+  const [isLoadingRooms, setIsLoadingRooms] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -40,7 +52,47 @@ function ChatContent() {
   const searchParams = useSearchParams();
   const isMobile = useIsMobile();
 
-  const roomId = "00000000-0000-0000-0000-000000000002";
+  // 1. Fetch Rooms
+  useEffect(() => {
+    const fetchRooms = async () => {
+      setIsLoadingRooms(true);
+      try {
+        let baseUrl = `http://${window.location.hostname}:8888`;
+        const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (envBackendUrl) {
+          baseUrl = envBackendUrl;
+        }
+
+        const response = await fetch(`${baseUrl}/rooms?user_id=${currentUser?.id || USER1_ID}`);
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            setRooms(data);
+            
+            // Priority for room selection:
+            // 1. Query Param
+            // 2. First room from API
+            // 3. Fallback already set
+            const roomParam = searchParams.get("room");
+            if (roomParam) {
+              setSelectedRoomId(roomParam);
+            } else if (data.length > 0) {
+              setSelectedRoomId(data[0].id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch rooms", error);
+      } finally {
+        setIsLoadingRooms(false);
+      }
+    };
+
+    fetchRooms();
+  }, [currentUser, searchParams]);
+
+  const roomId = selectedRoomId;
+  const selectedRoom = rooms.find(r => r.id === roomId);
 
   useEffect(() => {
     const initUser = async () => {
@@ -100,7 +152,9 @@ function ChatContent() {
     sendReadReceipt, 
     isConnected, 
     lastMessageSource,
-    initialUnreadCount 
+    initialUnreadCount,
+    isLoadingMessages,
+    messagesError
   } = useChat(
     roomId,
     userId
@@ -250,28 +304,46 @@ function ChatContent() {
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="flex cursor-pointer items-center border-b border-gray-50 bg-green-50 p-3 transition-colors">
-            <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#06C755] font-bold text-white">
-              GC
-            </div>
+          {isLoadingRooms ? (
+             <div className="p-4 text-center text-sm text-gray-400">กำลังโหลดห้อง...</div>
+          ) : rooms.length === 0 ? (
+             <div className="p-4 text-center text-sm text-gray-400">ไม่มีห้องแชท</div>
+          ) : (
+            rooms.map((room) => (
+              <div 
+                key={room.id}
+                onClick={() => setSelectedRoomId(room.id)}
+                className={`flex cursor-pointer items-center border-b border-gray-50 p-3 transition-colors ${
+                  room.id === roomId ? "bg-green-50" : "hover:bg-gray-50"
+                }`}
+              >
+                <div className="mr-3 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#06C755] font-bold text-white uppercase">
+                  {room.name?.substring(0, 2) || "RM"}
+                </div>
 
-            <div className="flex-1 overflow-hidden">
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-gray-800">
-                  Group Chat (Test)
-                </span>
-                <span className="text-xs text-gray-400">Now</span>
+                <div className="flex-1 overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className={`font-semibold truncate ${room.id === roomId ? "text-[#06C755]" : "text-gray-800"}`}>
+                      {room.name}
+                    </span>
+                    <span className="text-[10px] text-gray-400">
+                      {room.last_message ? new Date(room.last_message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <p className="truncate text-sm text-gray-500">
+                      {room.last_message ? room.last_message.content : (room.id === roomId && isConnected ? "Connected" : "")}
+                    </p>
+                    {room.unread_count > 0 && (
+                      <span className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#06C755] px-1.5 text-[10px] font-bold text-white">
+                        {room.unread_count}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center justify-between">
-                <p className="truncate text-sm text-[#06C755]">Connected</p>
-                {unreadCount > 0 && (
-                  <span className="ml-2 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[#06C755] px-1.5 text-[10px] font-bold text-white">
-                    {unreadCount}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
+            ))
+          )}
         </div>
       </aside>
 
@@ -280,9 +352,13 @@ function ChatContent() {
         {/* Chat Header */}
         <header className="flex shrink-0 items-center justify-between border-b border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex items-center">
-            <div className="mr-3 h-10 w-10 rounded-2xl bg-[#06C755]" />
+            <div className="mr-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-[#06C755] text-xs font-bold text-white uppercase">
+              {selectedRoom?.name?.substring(0, 2) || "RM"}
+            </div>
             <div>
-              <h2 className="text-base font-bold text-gray-800">Group Chat</h2>
+              <h2 className="text-base font-bold text-gray-800">
+                {selectedRoom?.name || "เลือกห้องแชท"}
+              </h2>
               <p className="text-xs text-gray-400">
                 {isConnected ? "Online" : "Offline"}
               </p>
@@ -301,17 +377,32 @@ function ChatContent() {
           </div>
         </header>
 
-        {/* Messages List */}
-        <section
+        {/* Message List */}
+        <div
           ref={scrollContainerRef}
           onScroll={handleScroll}
-          className="flex-1 min-h-0 space-y-4 overflow-y-auto bg-[#f7f9fa] p-4"
+          className="flex-1 overflow-y-auto bg-[#F0F2F5] p-4"
           style={{
             overscrollBehaviorY: "contain",
             WebkitOverflowScrolling: "touch",
           }}
         >
-          {messages.map((msg, index) => (
+          {isLoadingMessages && (
+            <div className="flex h-full items-center justify-center">
+              <p className="text-sm text-gray-400 italic">กำลังโหลดข้อความ...</p>
+            </div>
+          )}
+
+          {messagesError && (
+            <div className="flex h-full items-center justify-center p-10 text-center">
+              <div>
+                <p className="text-red-500 font-semibold mb-2">ไม่สามารถโหลดประวัติแชทได้</p>
+                <p className="text-xs text-gray-400">{messagesError}</p>
+              </div>
+            </div>
+          )}
+
+          {!isLoadingMessages && messages.map((msg, index) => (
             <div
               key={index}
               className={`flex ${msg.sender === "me" ? "justify-end" : "justify-start"
@@ -355,7 +446,7 @@ function ChatContent() {
             </div>
           ))}
 
-          {messages.length === 0 && (
+          {!isLoadingMessages && !messagesError && messages.length === 0 && (
             <div className="flex h-full flex-col items-center justify-center space-y-2 text-gray-400">
               <Smile size={48} />
               <p>ยังไม่มีข้อความ เริ่มแชทเลย!</p>
@@ -363,7 +454,7 @@ function ChatContent() {
           )}
 
           <div ref={bottomSentinelRef} aria-hidden="true" className="h-px" />
-        </section>
+        </div>
 
         {/* New Message Indicator */}
         {showNewMessageIndicator && (

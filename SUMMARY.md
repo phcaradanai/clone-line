@@ -19,22 +19,26 @@ This document summarizes the improvements and features implemented to transform 
 *   **Group Read Count**: Implemented "Read N" behavior for group chats. Sent messages now display the number of users who have read them (e.g., "Read 2"), matching the LINE experience.
 *   **Reliable Logic**: Fixed a critical bug where read status was calculated using random UUID sorting. Now uses robust `created_at` timestamp comparisons in SQL.
 
-## 4. Notifications & Unread Tracking
+## 4. Multi-Room & Dynamic Navigation
+*   **Dynamic Room Selection**: The app now supports switching between multiple rooms via a dynamic sidebar populated by the `/rooms` API.
+*   **Mobile Header Context**: The chat header dynamically updates to show the selected room's name and status, ensuring clarity on mobile devices.
+*   **Query Param Support**: Users can deep-link into specific rooms using `?room=<UUID>` or `?user=<ID>` parameters.
+
+## 5. Notifications & Unread Tracking
 *   **Persistent Unread Count**: Unread messages are calculated by the backend and fetched on initialization, ensuring the badge survives browser restarts.
-*   **In-App Badges**: A green unread count badge appears in the sidebar.
+*   **In-App Badges**: A green unread count badge appears in the sidebar for each room.
 *   **Tab Title Alerts**: The browser tab title updates (e.g., `(3) LINE Clone`) when new messages arrive while the user is in another tab.
 *   **Intelligent Reset**: Unread counts clear automatically when the user views the latest messages or returns to a visible tab.
 
-## 5. Production Readiness & Stability
-*   **Audit Fixes**: Resolved UUID comparison bugs in both backend (SQL) and frontend (Array index logic), ensuring perfect ordering of read receipts.
-*   **API Enhancements**: The `/rooms` endpoint now returns `last_message` data and accurate unread counts for a complete chat list view.
-*   **Full Type Safety**: Resolved all TypeScript errors and enforced strict literal types for `sender` and `type`.
-*   **Clean Linting**: Fixed React Hook linting errors and ensured efficient rendering cycles.
-*   **Robust Sync**: Frontend logic to ignore duplicate message IDs and handle real-time `read_count` updates gracefully.
+## 6. Production Readiness & Stability
+*   **Error Handling & Resilience**: Added loading/error states for message history loading in the frontend. The backend now performs strict UUID validation to prevent 500 errors.
+*   **Audit Fixes**: Resolved UUID comparison bugs in both backend (SQL) and frontend (Array index logic).
+*   **API Enhancements**: The `/messages` endpoint now returns data in correct chronological order with tie-breaking ID sorting.
+*   **Full Type Safety**: Achieved 100% TypeScript coverage and passed all strict linting rules.
 
-## 6. Architecture (Custom Hooks)
+## 7. Architecture (Custom Hooks)
 The system is built on a modular hook-based architecture:
-*   `useChat`: WebSocket messaging, read status syncing, and initial state fetching.
+*   `useChat`: WebSocket messaging, read status syncing, and initial state fetching (with loading/error states).
 *   `useReadReceipt`: Logic for sending read events based on scroll position and tab focus.
 *   `useUnreadBadge`: Manages persistent unread state and reset triggers.
 *   `useDocumentTitleUnread`: Updates browser tab title alerts.
