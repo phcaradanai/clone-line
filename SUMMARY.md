@@ -36,6 +36,7 @@ This document summarizes the improvements and features implemented to transform 
 *   **Error Handling & Resilience**: Added fallback room logic (General Chat) so the UI remains functional even if the `/rooms` API fails.
 *   **Non-Intrusive Error States**: Message loading errors now appear as compact banners, allowing real-time WebSocket communication to continue uninterrupted.
 *   **Strict UUID Validation**: All API endpoints and WebSocket handlers now perform pre-upgrade/pre-query UUID validation to prevent 500 Internal Server Errors.
+*   **Build-Time Hardening**: Fixed a critical TypeScript type mismatch in `useReadReceipt.ts` (optional message IDs) that was causing deployment failures, ensuring 100% build success.
 *   **Full Type Safety**: Passed all strict linting rules and achieved 100% TypeScript coverage.
 
 ## 7. Architecture (Custom Hooks)

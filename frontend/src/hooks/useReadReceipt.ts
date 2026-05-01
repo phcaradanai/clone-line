@@ -39,7 +39,7 @@ export function useReadReceipt(
       shouldSend
     });
 
-    if (shouldSend && latestOtherMessage) {
+    if (shouldSend && latestOtherMessage && latestOtherMessage.id) {
       console.log("[READ] sending payload for message:", latestOtherMessage.id);
       sendReadReceipt(latestOtherMessage.id);
       lastReadIdRef.current = latestOtherMessage.id;
