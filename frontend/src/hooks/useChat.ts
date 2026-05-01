@@ -6,6 +6,8 @@ export type Message = {
   id?: string;
   room_id: string;
   user_id: string;
+  reply_to_message_id?: string;
+  reply_to_message?: Message;
   content: string;
   type: 'text' | 'image' | 'file';
   file_url?: string;
@@ -122,8 +124,8 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
       try {
         const data = JSON.parse(event.data);
         
-        if (data.type === 'message:read') {
-          const { lastReadMessageId, userId: readerId, roomId: eventRoomId } = data.payload;
+        if (data.type === 'room.read') {
+          const { last_read_message_id: lastReadMessageId, user_id: readerId, room_id: eventRoomId } = data.payload;
           
           // Only apply read receipt if it's for the current room
           if (eventRoomId === roomId && readerId !== userId) {
@@ -142,11 +144,16 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
           return;
         }
 
+        let msgData = data;
+        if (data.type === 'message.created') {
+          msgData = data.payload;
+        }
+
         // Transform incoming message
         const incomingMsg: Message = {
-          ...data,
-          sender: data.user_id === userId ? 'me' : 'other',
-          time: new Date(data.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          ...msgData,
+          sender: msgData.user_id === userId ? 'me' : 'other',
+          time: new Date(msgData.created_at || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
         // Global callback for all incoming messages (useful for sidebar unread counts)
@@ -180,7 +187,7 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
     };
   }, [roomId, userId, onNewMessage]);
 
-  const sendMessage = useCallback((content: string, type: 'text' | 'image' = 'text', fileUrl?: string) => {
+  const sendMessage = useCallback((content: string, type: 'text' | 'image' = 'text', fileUrl?: string, replyToMessageId?: string) => {
     if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
       const msg = {
         room_id: roomId,
@@ -188,25 +195,34 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
         content: content,
         type: type,
         file_url: fileUrl,
+        reply_to_message_id: replyToMessageId || undefined,
       };
       setLastMessageSource('sent');
       socketRef.current.send(JSON.stringify(msg));
     }
   }, [roomId, userId]);
 
-  const sendReadReceipt = useCallback((lastReadMessageId: string) => {
-    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-      const readEvent = {
-        type: 'message:read',
-        payload: {
-          room_id: roomId,
+  const sendReadReceipt = useCallback(async (lastReadMessageId: string) => {
+    try {
+      let baseUrl = `http://${window.location.hostname}:8888`;
+      if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+        baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      }
+
+      console.log("[READ] sending REST payload for message:", lastReadMessageId);
+      
+      await fetch(`${baseUrl}/api/v1/rooms/${roomId}/read`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
           user_id: userId,
-          last_read_message_id: lastReadMessageId,
-          read_at: new Date().toISOString()
-        }
-      };
-      console.log("[READ] sending payload:", readEvent);
-      socketRef.current.send(JSON.stringify(readEvent));
+          last_read_message_id: lastReadMessageId
+        })
+      });
+    } catch (error) {
+      console.error("[READ] failed to mark as read via REST:", error);
     }
   }, [roomId, userId]);
 

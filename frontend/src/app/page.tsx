@@ -16,6 +16,7 @@ import {
   ChevronDown,
   Menu,
   X,
+  Reply,
 } from "lucide-react";
 import { useChat, type Message } from "@/hooks/useChat";
 import { useChatAutoScroll } from "@/hooks/useChatAutoScroll";
@@ -57,6 +58,8 @@ function ChatContent() {
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
   const [roomsError, setRoomsError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [replyingToMessage, setReplyingToMessage] = useState<Message | null>(null);
+  const [readersModal, setReadersModal] = useState<{isOpen: boolean, messageId: string | null, readers: {id: string, username: string}[], loading: boolean}>({isOpen: false, messageId: null, readers: [], loading: false});
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -120,6 +123,26 @@ function ChatContent() {
 
   const roomId = selectedRoomId;
   const selectedRoom = rooms.find(r => r.id === roomId) || (roomId === DEFAULT_ROOM_ID ? FALLBACK_ROOM : null);
+
+  const fetchReaders = async (messageId: string) => {
+    setReadersModal(prev => ({ ...prev, isOpen: true, messageId, loading: true }));
+    try {
+      let baseUrl = `http://${window.location.hostname}:8888`;
+      if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+        baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      }
+      const res = await fetch(`${baseUrl}/api/v1/rooms/${roomId}/messages/${messageId}/readers`);
+      if (res.ok) {
+        const readers = await res.json();
+        setReadersModal({ isOpen: true, messageId, readers: readers || [], loading: false });
+      } else {
+        setReadersModal(prev => ({ ...prev, loading: false }));
+      }
+    } catch (e) {
+      console.error("Failed to fetch readers", e);
+      setReadersModal(prev => ({ ...prev, loading: false }));
+    }
+  };
 
   useEffect(() => {
     const initUser = async () => {
@@ -255,8 +278,9 @@ function ChatContent() {
 
     if (!value || !isConnected) return;
 
-    sendMessage(value);
+    sendMessage(value, "text", undefined, replyingToMessage?.id);
     setInputValue("");
+    setReplyingToMessage(null);
 
     requestAnimationFrame(() => {
       scrollToBottom("smooth");
@@ -265,7 +289,7 @@ function ChatContent() {
         inputRef.current?.focus();
       }
     });
-  }, [inputValue, isConnected, sendMessage, scrollToBottom, isMobile]);
+  }, [inputValue, isConnected, sendMessage, scrollToBottom, isMobile, replyingToMessage?.id]);
 
   const handleInputFocus = useCallback(() => {
     if (!isMobile) return;
@@ -302,7 +326,8 @@ function ChatContent() {
       const data = await response.json();
 
       if (data.url) {
-        sendMessage("Sent an image", "image", data.url);
+        sendMessage("Sent an image", "image", data.url, replyingToMessage?.id);
+        setReplyingToMessage(null);
 
         requestAnimationFrame(() => {
           scrollToBottom("smooth");
@@ -489,6 +514,11 @@ function ChatContent() {
                         : "bg-white text-gray-800 rounded-tl-[4px] border border-gray-100"
                     }`}
                   >
+                    {msg.reply_to_message && (
+                      <div className={`mb-1.5 rounded bg-black/5 p-1.5 text-xs ${isMe ? "border-l-2 border-white/50 text-white/90" : "border-l-2 border-[#06C755] text-gray-600"}`}>
+                        {msg.reply_to_message.content}
+                      </div>
+                    )}
                     {msg.type === "image" ? (
                       <img
                         src={msg.file_url}
@@ -509,10 +539,20 @@ function ChatContent() {
                       {msg.time}
                     </span>
                     {isMe && (msg.read_count || 0) > 0 && (
-                      <span className="font-medium text-[#06C755]">
+                      <span 
+                        className="font-medium text-[#06C755] cursor-pointer hover:underline"
+                        onClick={() => fetchReaders(msg.id!)}
+                      >
                         Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
                       </span>
                     )}
+                    <button 
+                      onClick={() => setReplyingToMessage(msg)}
+                      className="text-gray-400 hover:text-gray-600 transition-colors mx-1"
+                      title="Reply"
+                    >
+                      <Reply size={12} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -542,12 +582,23 @@ function ChatContent() {
 
         {/* Input Area */}
         <footer
-          className="shrink-0 border-t border-gray-100 bg-white px-3 py-3 md:px-4 md:py-4"
+          className="shrink-0 border-t border-gray-100 bg-white px-3 py-3 md:px-4 md:py-4 flex flex-col"
           style={{
             paddingBottom: "max(0.75rem, env(safe-area-inset-bottom, 0px))",
           }}
         >
-          <div className="flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 transition-all focus-within:border-[#06C755] md:gap-3 md:px-4">
+          {replyingToMessage && (
+            <div className="mb-2 flex items-center justify-between rounded-t-lg bg-gray-50 px-3 py-2 text-sm border-l-4 border-[#06C755]">
+              <div className="flex flex-col overflow-hidden">
+                <span className="font-semibold text-[#06C755]">Replying to {replyingToMessage.sender === 'me' ? 'yourself' : 'user'}</span>
+                <span className="truncate text-gray-500 text-xs">{replyingToMessage.content}</span>
+              </div>
+              <button onClick={() => setReplyingToMessage(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          <div className={`flex items-end gap-2 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 transition-all focus-within:border-[#06C755] md:gap-3 md:px-4 ${replyingToMessage ? 'rounded-tl-none rounded-tr-none border-t-0' : ''}`}>
             <input
               type="file"
               ref={fileInputRef}
@@ -606,6 +657,37 @@ function ChatContent() {
           </div>
         </footer>
       </main>
+
+      {readersModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-4 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b pb-2">
+              <h3 className="font-semibold text-gray-800">Read by</h3>
+              <button onClick={() => setReadersModal({ isOpen: false, messageId: null, readers: [], loading: false })} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mt-3 max-h-60 overflow-y-auto">
+              {readersModal.loading ? (
+                <p className="text-center text-sm text-gray-500 py-4">Loading...</p>
+              ) : readersModal.readers.length === 0 ? (
+                <p className="text-center text-sm text-gray-500 py-4">No readers found.</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {readersModal.readers.map(r => (
+                    <div key={r.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-gray-50">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-medium uppercase text-gray-600">
+                        {r.username.substring(0, 2)}
+                      </div>
+                      <span className="text-sm font-medium text-gray-700">{r.username}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

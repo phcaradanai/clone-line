@@ -32,3 +32,28 @@
 ### Notes
 - เนื่องจากใน `room_members` เดิมมีการเก็บสถานะการอ่านไว้ แต่ได้ออกแบบใหม่เป็นตาราง `room_read_states` ถ้ามีข้อมูลเดิมอยู่ อาจจะต้องมี Migration Script แยกเพื่อโอนย้ายข้อมูล
 - `GET /readers` กรอง sender และผู้ใช้ที่ไม่ได้อยู่ห้องแชทแล้ว (inactive members) ผ่านคำสั่ง `JOIN room_members` ตาม requirement
+
+## 2026-05-01 23:23
+
+### Summary
+- Integrated Frontend with Reply-to-Message and Group Read Receipts backend APIs.
+- Built Reply UI (Preview, Button, Input Banner) in `page.tsx`.
+- Refactored `sendReadReceipt` to use REST API and updated WS handler.
+- Added Readers List Modal for group read receipts.
+
+### Changed Files
+- frontend/src/hooks/useChat.ts
+- frontend/src/app/page.tsx
+
+### Details
+- **useChat.ts**: Updated the `Message` interface to support `reply_to_message_id` and `reply_to_message`. Refactored `sendReadReceipt` to call the new REST API `POST /api/v1/rooms/:roomId/read`. Updated the WebSocket handler to listen for `room.read` and extract payloads from `message.created` properly.
+- **page.tsx**: Added a `replyingToMessage` state to manage the active reply context. Added a Reply button to each message bubble. Rendered a preview snippet of the replied message inside message bubbles. Created a "Replying to..." banner above the input text area. Implemented a Readers List Modal (`fetchReaders`) that triggers when clicking the "Read {count}" text, calling `GET /api/v1/rooms/:roomId/messages/:messageId/readers` and displaying a popup list of users.
+
+### Validation
+- **Command**: `npm run typecheck`
+- **Result**: Failed (Missing script: "typecheck" in package.json)
+- **Command**: `npm run lint`
+- **Result**: Passed (Fixed one warning related to exhaustive-deps `replyingToMessage?.id`).
+
+### Notes
+- None
