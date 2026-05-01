@@ -35,12 +35,7 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 			       m.type, 
 			       COALESCE(m.file_url, '') as file_url, 
 			       m.created_at,
-			       (SELECT COUNT(rm.user_id) 
-			        FROM room_members rm 
-			        JOIN messages m_read ON rm.last_read_message_id = m_read.id
-			        WHERE rm.room_id = m.room_id 
-			        AND rm.user_id != m.user_id 
-			        AND m_read.created_at >= m.created_at) as read_count,
+			       0 as read_count,
 			       COALESCE(u.username, 'anonymous') as username, 
 			       COALESCE(u.display_name, 'Unknown User') as display_name, 
 			       COALESCE(u.avatar_url, '') as avatar_url
@@ -54,7 +49,7 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	
 	rows, err := r.db.Query(context.Background(), query, roomID, limit, offset)
 	if err != nil {
-		log.Printf("ERROR: GetMessages Query failed (room_id: %s): %v", roomID, err)
+		log.Printf("[DATABASE] GetMessages Query Error | room_id: %s | error: %v", roomID, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -66,7 +61,7 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 		err := rows.Scan(&m.ID, &m.RoomID, &m.UserID, &m.Content, &m.Type, &m.FileURL, &m.CreatedAt, &m.ReadCount,
 			&u.Username, &u.DisplayName, &u.AvatarURL)
 		if err != nil {
-			log.Printf("ERROR: GetMessages Scan failed: %v", err)
+			log.Printf("[DATABASE] GetMessages Scan Error | room_id: %s | error: %v", roomID, err)
 			return nil, err
 		}
 		u.ID = m.UserID
@@ -100,11 +95,7 @@ func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, erro
 
 func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	query := `SELECT r.id, COALESCE(r.name, ''), r.is_group, r.created_at, rm.last_read_message_id, rm.last_read_at,
-	          (SELECT COUNT(*) FROM messages m 
-	           LEFT JOIN messages m_read ON m_read.id = rm.last_read_message_id
-	           WHERE m.room_id = r.id 
-	           AND m.user_id != $1
-	           AND (rm.last_read_message_id IS NULL OR m.created_at > m_read.created_at)) as unread_count,
+	          0 as unread_count,
 	          lm.id, COALESCE(lm.content, ''), lm.type, lm.created_at
 	          FROM rooms r
 	          JOIN room_members rm ON r.id = rm.room_id
@@ -120,6 +111,7 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	
 	rows, err := r.db.Query(context.Background(), query, userID)
 	if err != nil {
+		log.Printf("[DATABASE] GetRooms Query Error | user_id: %s | error: %v", userID, err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -138,6 +130,7 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 			&lmID, &lmContent, &lmType, &lmCreatedAt,
 		)
 		if err != nil {
+			log.Printf("[DATABASE] GetRooms Scan Error | user_id: %s | error: %v", userID, err)
 			return nil, err
 		}
 

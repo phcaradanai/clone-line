@@ -29,6 +29,14 @@ import { useSearchParams, useRouter } from "next/navigation";
 const USER1_ID = "00000000-0000-0000-0000-000000000001";
 const USER2_ID = "00000000-0000-0000-0000-000000000003";
 
+const DEFAULT_ROOM_ID = "00000000-0000-0000-0000-000000000002";
+const FALLBACK_ROOM = {
+  id: DEFAULT_ROOM_ID,
+  name: "General Chat",
+  is_group: true,
+  unread_count: 0,
+};
+
 function ChatContent() {
   const [inputValue, setInputValue] = useState("");
   const [currentUser, setCurrentUser] = useState<{
@@ -45,8 +53,9 @@ function ChatContent() {
       created_at: string;
     };
   }[]>([]);
-  const [selectedRoomId, setSelectedRoomId] = useState<string>("00000000-0000-0000-0000-000000000002");
+  const [selectedRoomId, setSelectedRoomId] = useState<string>(DEFAULT_ROOM_ID);
   const [isLoadingRooms, setIsLoadingRooms] = useState(false);
+  const [roomsError, setRoomsError] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +69,7 @@ function ChatContent() {
   useEffect(() => {
     const fetchRooms = async () => {
       setIsLoadingRooms(true);
+      setRoomsError(null);
       try {
         let baseUrl = `http://${window.location.hostname}:8888`;
         const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -84,9 +94,12 @@ function ChatContent() {
               setSelectedRoomId(data[0].id);
             }
           }
+        } else {
+          setRoomsError("ไม่สามารถโหลดรายการห้องได้");
         }
       } catch (error) {
         console.error("Failed to fetch rooms", error);
+        setRoomsError("การเชื่อมต่อขัดข้อง");
       } finally {
         setIsLoadingRooms(false);
       }
@@ -106,7 +119,7 @@ function ChatContent() {
   }, [searchParams, router]);
 
   const roomId = selectedRoomId;
-  const selectedRoom = rooms.find(r => r.id === roomId);
+  const selectedRoom = rooms.find(r => r.id === roomId) || (roomId === DEFAULT_ROOM_ID ? FALLBACK_ROOM : null);
 
   useEffect(() => {
     const initUser = async () => {
@@ -300,6 +313,8 @@ function ChatContent() {
     <div className="flex-1 overflow-y-auto">
       {isLoadingRooms ? (
         <div className="p-4 text-center text-sm text-gray-400">กำลังโหลดห้อง...</div>
+      ) : roomsError ? (
+        <div className="p-4 text-center text-sm text-red-400 bg-red-50 m-2 rounded-lg border border-red-100">{roomsError}</div>
       ) : rooms.length === 0 ? (
         <div className="p-4 text-center text-sm text-gray-400">ไม่มีห้องแชท</div>
       ) : (
@@ -431,18 +446,15 @@ function ChatContent() {
             WebkitOverflowScrolling: "touch",
           }}
         >
-          {isLoadingMessages && (
-            <div className="flex h-full items-center justify-center">
-              <p className="text-sm text-gray-400 italic">กำลังโหลดข้อความ...</p>
+          {isLoadingMessages && messages.length === 0 && (
+            <div className="flex h-10 items-center justify-center">
+              <p className="text-xs text-gray-400 italic">กำลังโหลดข้อความ...</p>
             </div>
           )}
 
           {messagesError && (
-            <div className="flex h-full items-center justify-center p-10 text-center">
-              <div>
-                <p className="text-red-500 font-semibold mb-2">ไม่สามารถโหลดประวัติแชทได้</p>
-                <p className="text-xs text-gray-400">{messagesError}</p>
-              </div>
+            <div className="mb-4 rounded-lg bg-red-50 p-3 text-center border border-red-100">
+              <p className="text-xs text-red-500 font-semibold">โหลดข้อความเก่าไม่สำเร็จ: {messagesError}</p>
             </div>
           )}
 

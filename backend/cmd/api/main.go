@@ -167,12 +167,31 @@ func main() {
 		roomID := r.URL.Query().Get("room_id")
 		userID := r.URL.Query().Get("user_id")
 		if roomID == "" || userID == "" {
-			http.Error(w, "room_id and user_id are required", http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "room_id and user_id are required"})
 			return
 		}
+
+		if _, err := uuid.Parse(roomID); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid room_id"})
+			return
+		}
+		if _, err := uuid.Parse(userID); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid user_id"})
+			return
+		}
+
 		count, err := chatUsecase.GetUnreadCount(roomID, userID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("[API] /unread Error | room_id: %s | user_id: %s | error: %v", roomID, userID, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -182,12 +201,25 @@ func main() {
 	mux.HandleFunc("/rooms", func(w http.ResponseWriter, r *http.Request) {
 		userID := r.URL.Query().Get("user_id")
 		if userID == "" {
-			http.Error(w, "user_id is required", http.StatusBadRequest)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "user_id is required"})
 			return
 		}
+
+		if _, err := uuid.Parse(userID); err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{"error": "invalid user_id"})
+			return
+		}
+
 		rooms, err := chatUsecase.GetUserRooms(userID)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			log.Printf("[API] /rooms Error | user_id: %s | error: %v", userID, err)
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")

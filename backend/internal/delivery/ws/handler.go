@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/phcar/chat-app-backend/internal/domain"
 	"github.com/phcar/chat-app-backend/internal/usecase"
@@ -19,17 +20,28 @@ var upgrader = websocket.Upgrader{
 }
 
 func ServeWs(hub *Hub, uc usecase.ChatUsecase, w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
+	userID := r.URL.Query().Get("user_id")
+	
+	// Validation BEFORE upgrade
+	if userID == "" {
+		log.Printf("[WS] Connection rejected: user_id is required")
+		http.Error(w, "user_id is required", http.StatusBadRequest)
 		return
 	}
 
-	// In a real app, extract user ID from JWT
-	userID := r.URL.Query().Get("user_id")
-	if userID == "" {
-		userID = "anonymous"
+	if _, err := uuid.Parse(userID); err != nil {
+		log.Printf("[WS] Connection rejected: invalid user_id (%s)", userID)
+		http.Error(w, "invalid user_id", http.StatusBadRequest)
+		return
 	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[WS] Upgrade error for user %s: %v", userID, err)
+		return
+	}
+
+	log.Printf("[WS] User connected: %s", userID)
 
 	client := &Client{
 		ID:      userID,
