@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -249,6 +251,12 @@ func main() {
 			return
 		}
 
+		// Bypass logging for WebSocket to avoid Hijacker issues
+		if r.URL.Path == "/ws" {
+			mux.ServeHTTP(w, r)
+			return
+		}
+
 		// Wrapper to capture status code
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 
@@ -271,4 +279,12 @@ type statusWriter struct {
 func (sw *statusWriter) WriteHeader(status int) {
 	sw.status = status
 	sw.ResponseWriter.WriteHeader(status)
+}
+
+func (sw *statusWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := sw.ResponseWriter.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not implement http.Hijacker")
+	}
+	return hijacker.Hijack()
 }

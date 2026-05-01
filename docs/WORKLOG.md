@@ -125,3 +125,4 @@
 - **Root Cause**: The runtime Gateway Timeout and SQL errors were caused by the app using `sender_id` in some parts while the schema used `user_id`, combined with missing indexes for large message volumes.
 - **Safety**: Migration `20260501_add_reply_and_read_states.sql` is now fully idempotent and safe to run on existing data.
 - **Build Fix**: Moved `statusWriter` struct outside of `main()` to fix Go compilation error (invalid method receiver on local type).
+- **WS Fix**: Implemented `http.Hijacker` in `statusWriter` and bypassed logging for `/ws` to fix WebSocket upgrade error ("response does not implement http.Hijacker").
