@@ -51,7 +51,7 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 	}
 	defer rows.Close()
 
-	var messages []domain.Message
+	messages := []domain.Message{}
 	for rows.Next() {
 		var m domain.Message
 		var u domain.User
@@ -115,27 +115,32 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	}
 	defer rows.Close()
 
-	var rooms []domain.Room
+	rooms := []domain.Room{}
 	for rows.Next() {
 		var rm domain.Room
 		var lmID, lmContent, lmType *string
 		var lmCreatedAt *time.Time
+		var lastReadMessageID *string
+		var lastReadAt *time.Time
 		
 		err := rows.Scan(
 			&rm.ID, &rm.Name, &rm.IsGroup, &rm.CreatedAt, 
-			&rm.LastReadMessageID, &rm.LastReadAt, &rm.UnreadCount, 
+			&lastReadMessageID, &lastReadAt, &rm.UnreadCount, 
 			&lmID, &lmContent, &lmType, &lmCreatedAt,
 		)
 		if err != nil {
 			return nil, err
 		}
+
+		rm.LastReadMessageID = lastReadMessageID
+		rm.LastReadAt = lastReadAt
 		
 		if lmID != nil {
 			rm.LastMessage = &domain.Message{
 				ID:        *lmID,
-				Content:   *lmContent,
-				Type:      *lmType,
-				CreatedAt: *lmCreatedAt,
+				Content:   COALESCE(lmContent, ""),
+				Type:      COALESCE(lmType, "text"),
+				CreatedAt: COALESCE_TIME(lmCreatedAt),
 			}
 		}
 		
@@ -143,6 +148,17 @@ func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
 	}
 	return rooms, nil
 }
+
+func COALESCE(s *string, def string) string {
+	if s == nil { return def }
+	return *s
+}
+
+func COALESCE_TIME(t *time.Time) time.Time {
+	if t == nil { return time.Time{} }
+	return *t
+}
+
 
 
 func (r *chatRepository) GetRoom(roomID string) (*domain.Room, error) {
