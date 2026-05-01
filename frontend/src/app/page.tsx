@@ -513,6 +513,7 @@ function ChatContent() {
                         Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
                       </span>
                     )}
+                  </div>
                 </div>
               </div>
             );
