@@ -134,7 +134,6 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
         if (data.type === 'room.read') {
           const { last_read_message_id: lastReadMessageId, user_id: readerId, room_id: eventRoomId } = data.payload;
           
-          // Only apply read receipt if it's for the current room
           if (eventRoomId === roomId && readerId !== userId) {
             setMessages((prev) => {
               const readIndex = prev.findIndex(m => m.id === lastReadMessageId);
@@ -147,6 +146,26 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
                 return msg;
               });
             });
+          }
+          return;
+        }
+
+        if (data.type === 'message.deleted') {
+          const { message_id: deletedId, room_id: eventRoomId } = data.payload;
+          if (eventRoomId === roomId) {
+            setMessages((prev) => prev.map(m => {
+              if (m.id === deletedId) {
+                return { 
+                  ...m, 
+                  is_deleted: true, 
+                  content: "ลบข้อความนี้แล้ว", 
+                  type: 'deleted',
+                  file_url: undefined,
+                  reply_to_message: undefined
+                };
+              }
+              return m;
+            }));
           }
           return;
         }
@@ -233,11 +252,38 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
     }
   }, [roomId, userId]);
 
+  const deleteMessage = useCallback(async (messageId: string) => {
+    try {
+      let baseUrl = `http://${window.location.hostname}:8888`;
+      if (process.env.NEXT_PUBLIC_BACKEND_URL) {
+        baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      }
+
+      const response = await fetch(`${baseUrl}/api/v1/messages/${messageId}`, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          scope: "everyone"
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete message");
+      }
+    } catch (error) {
+      console.error("[DELETE] failed to delete message:", error);
+    }
+  }, [userId]);
+
   return { 
     messages, 
     isConnected, 
     sendMessage, 
     sendReadReceipt, 
+    deleteMessage,
     lastMessageSource, 
     initialUnreadCount,
     isLoadingMessages,

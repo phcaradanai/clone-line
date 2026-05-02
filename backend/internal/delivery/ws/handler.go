@@ -21,7 +21,7 @@ var upgrader = websocket.Upgrader{
 
 func ServeWs(hub *Hub, uc usecase.ChatUsecase, w http.ResponseWriter, r *http.Request) {
 	userID := r.URL.Query().Get("user_id")
-	
+
 	// Validation BEFORE upgrade
 	if userID == "" {
 		log.Printf("[WS] Connection rejected: user_id is required")
@@ -76,7 +76,7 @@ func (c *Client) readPump() {
 			Type    string          `json:"type"`
 			Payload json.RawMessage `json:"payload"`
 		}
-		
+
 		if err := json.Unmarshal(message, &event); err == nil && event.Type == "message:read" {
 			var payload struct {
 				RoomID            string `json:"room_id"`
@@ -86,7 +86,7 @@ func (c *Client) readPump() {
 			}
 			if err := json.Unmarshal(event.Payload, &payload); err == nil {
 				log.Printf("[WS] message:read received from user %s for room %s", payload.UserID, payload.RoomID)
-				
+
 				// Update persistence
 				err := c.Usecase.MarkAsRead(payload.RoomID, payload.UserID, payload.LastReadMessageID)
 				if err != nil {
@@ -105,7 +105,7 @@ func (c *Client) readPump() {
 			if msg.UserID == "" {
 				msg.UserID = c.ID
 			}
-			
+
 			// Try to save to database but don't block broadcasting if it fails
 			err := c.Usecase.SendMessage(&msg)
 			if err != nil {

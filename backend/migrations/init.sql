@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS room_members (
     room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_read_message_id UUID, -- No hard FK to allow message deletion placeholders
+    last_read_at TIMESTAMP WITH TIME ZONE,
+    unread_count INTEGER DEFAULT 0,
     PRIMARY KEY (room_id, user_id)
 );
 
@@ -30,15 +33,10 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT,
     type VARCHAR(20) NOT NULL DEFAULT 'text',
     file_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS room_read_states (
-    room_id UUID REFERENCES rooms(id) ON DELETE CASCADE,
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    last_read_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
-    last_read_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (room_id, user_id)
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    delete_scope VARCHAR(20)
 );
 
 -- 2. Indexes
@@ -46,9 +44,9 @@ CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_messages_room_created_at ON messages(room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_reply_to_message_id ON messages(reply_to_message_id);
+CREATE INDEX IF NOT EXISTS idx_messages_deleted_at ON messages(deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
-CREATE INDEX IF NOT EXISTS idx_room_read_states_user_id ON room_read_states(user_id);
-CREATE INDEX IF NOT EXISTS idx_room_read_states_last_read_message_id ON room_read_states(last_read_message_id);
+CREATE INDEX IF NOT EXISTS idx_room_members_unread ON room_members(room_id, user_id) WHERE unread_count > 0;
 
 -- 3. Essential Seed Data
 -- Insert Default Room for testing

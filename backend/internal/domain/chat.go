@@ -14,37 +14,41 @@ type User struct {
 }
 
 type Room struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	IsGroup   bool      `json:"is_group"`
-	CreatedAt time.Time `json:"created_at"`
-	Members   []User    `json:"members,omitempty"`
-	UnreadCount int     `json:"unread_count"`
-	LastMessage *Message `json:"last_message,omitempty"`
-	LastReadMessageID *string `json:"last_read_message_id,omitempty"`
-	LastReadAt *time.Time `json:"last_read_at,omitempty"`
+	ID                string     `json:"id"`
+	Name              string     `json:"name"`
+	IsGroup           bool       `json:"is_group"`
+	CreatedAt         time.Time  `json:"created_at"`
+	Members           []User     `json:"members,omitempty"`
+	UnreadCount       int        `json:"unread_count"`
+	LastMessage       *Message   `json:"last_message,omitempty"`
+	LastReadMessageID *string    `json:"last_read_message_id,omitempty"`
+	LastReadAt        *time.Time `json:"last_read_at,omitempty"`
 }
 
 type RoomReadState struct {
-	RoomID            string    `json:"room_id"`
-	UserID            string    `json:"user_id"`
-	LastReadMessageID *string   `json:"last_read_message_id,omitempty"`
-	LastReadAt        time.Time `json:"last_read_at"`
+	RoomID            string     `json:"room_id"`
+	UserID            string     `json:"user_id"`
+	LastReadMessageID *string    `json:"last_read_message_id,omitempty"`
+	LastReadAt        *time.Time `json:"last_read_at,omitempty"`
+	UnreadCount       int        `json:"unread_count"`
 }
 type Message struct {
-	ID        string    `json:"id"`
-	RoomID    string    `json:"room_id"`
-	UserID    string    `json:"user_id"`
-	ReplyToMessageID *string `json:"reply_to_message_id,omitempty"`
-	Content   string    `json:"content"`
-	Type      string    `json:"type"` // text, image, file
-	FileURL   string    `json:"file_url,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	ReadCount int       `json:"read_count"`
-	User      *User     `json:"user,omitempty"`
-	ReplyToMessage *Message `json:"reply_to_message,omitempty"`
-	Preview   string    `json:"preview,omitempty"`
-	IsDeleted bool      `json:"is_deleted,omitempty"`
+	ID               string     `json:"id"`
+	RoomID           string     `json:"room_id"`
+	UserID           string     `json:"user_id"`
+	ReplyToMessageID *string    `json:"reply_to_message_id,omitempty"`
+	Content          string     `json:"content"`
+	Type             string     `json:"type"` // text, image, file, deleted
+	FileURL          string     `json:"file_url,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	ReadCount        int        `json:"read_count"`
+	User             *User      `json:"user,omitempty"`
+	ReplyToMessage   *Message   `json:"reply_to_message,omitempty"`
+	Preview          string     `json:"preview,omitempty"`
+	DeletedAt        *time.Time `json:"deleted_at,omitempty"`
+	DeletedBy        *string    `json:"deleted_by,omitempty"`
+	DeleteScope      *string    `json:"delete_scope,omitempty"`
+	IsDeleted        bool       `json:"is_deleted,omitempty"`
 }
 
 type EventPublisher interface {
@@ -62,6 +66,7 @@ type ChatRepository interface {
 	GetUnreadCount(roomID string, userID string) (int, error)
 	GetMessageReaders(roomID string, messageID string) ([]User, error)
 	GetMessage(messageID string) (*Message, error)
+	DeleteMessage(messageID string, userID string, scope string) error
 }
 
 type ValidationError struct {

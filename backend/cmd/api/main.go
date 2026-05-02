@@ -78,13 +78,21 @@ func main() {
 	// Initialize Image Upload Handler with Retry (Waiting for Minio)
 	var uploadHandler *deliveryHttp.UploadHandler
 	minioEndpoint := os.Getenv("MINIO_ENDPOINT")
-	if minioEndpoint == "" { minioEndpoint = "localhost:9000" }
+	if minioEndpoint == "" {
+		minioEndpoint = "localhost:9000"
+	}
 	minioAccessKey := os.Getenv("MINIO_ACCESS_KEY")
-	if minioAccessKey == "" { minioAccessKey = "minioadmin" }
+	if minioAccessKey == "" {
+		minioAccessKey = "minioadmin"
+	}
 	minioSecretKey := os.Getenv("MINIO_SECRET_KEY")
-	if minioSecretKey == "" { minioSecretKey = "minioadminpassword" }
+	if minioSecretKey == "" {
+		minioSecretKey = "minioadminpassword"
+	}
 	minioBucket := os.Getenv("MINIO_BUCKET")
-	if minioBucket == "" { minioBucket = "chat-uploads" }
+	if minioBucket == "" {
+		minioBucket = "chat-uploads"
+	}
 
 	for i := 0; i < 10; i++ {
 		uploadHandler, err = deliveryHttp.NewUploadHandler(
@@ -115,6 +123,7 @@ func main() {
 	chatHandler := deliveryHttp.NewChatHandler(chatUsecase)
 	mux.HandleFunc("POST /api/v1/rooms/{roomId}/read", chatHandler.MarkAsRead)
 	mux.HandleFunc("GET /api/v1/rooms/{roomId}/messages/{messageId}/readers", chatHandler.GetMessageReaders)
+	mux.HandleFunc("DELETE /api/v1/messages/{messageId}", chatHandler.DeleteMessage)
 
 	// Chat History endpoint
 	mux.HandleFunc("/messages", func(w http.ResponseWriter, r *http.Request) {
@@ -138,7 +147,7 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]string{"error": "invalid room_id"})
 			return
 		}
-		
+
 		messages, err := chatUsecase.GetChatHistory(roomID, 50, 0)
 		if err != nil {
 			log.Printf("ERROR: Failed to fetch chat history for room %s: %v", roomID, err)
@@ -147,7 +156,7 @@ func main() {
 			json.NewEncoder(w).Encode(map[string]string{"error": "internal server error"})
 			return
 		}
-		
+
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(messages)
 	})
@@ -232,21 +241,22 @@ func main() {
 		json.NewEncoder(w).Encode(rooms)
 	})
 
-
 	port := os.Getenv("PORT")
-	if port == "" { port = "8888" }
+	if port == "" {
+		port = "8888"
+	}
 
 	log.Printf("Server starting on port %s...", port)
-	
+
 	// Middleware for Logging & CORS
 	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-		
+
 		// CORS headers
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
 		w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
-		
+
 		if r.Method == "OPTIONS" {
 			return
 		}

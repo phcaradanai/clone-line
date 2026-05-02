@@ -126,3 +126,38 @@
 - **Safety**: Migration `20260501_add_reply_and_read_states.sql` is now fully idempotent and safe to run on existing data.
 - **Build Fix**: Moved `statusWriter` struct outside of `main()` to fix Go compilation error (invalid method receiver on local type).
 - **WS Fix**: Implemented `http.Hijacker` in `statusWriter` and bypassed logging for `/ws` to fix WebSocket upgrade error ("response does not implement http.Hijacker").
+
+## 2026-05-02 10:50
+
+### Summary
+- เสร็จสิ้นฟีเจอร์หลักของระบบแชท: Read Receipts, Unread Counts พร้อมตัวคั่น, และฟีเจอร์ลบข้อความ (Delete for Everyone)
+
+### Changed Files
+- backend/migrations/20260502_complete_read_and_delete.sql
+- backend/migrations/init.sql
+- backend/internal/domain/chat.go
+- backend/internal/repository/postgres/chat_repository.go
+- backend/internal/usecase/chat_usecase.go
+- backend/internal/delivery/http/chat_handler.go
+- backend/cmd/api/main.go
+- frontend/src/hooks/useChat.ts
+- frontend/src/app/page.tsx
+
+### Details
+- **Read State & Unread Counts**: ย้ายข้อมูลการอ่านและจำนวนข้อความที่ยังไม่ได้อ่านไปไว้ในตาราง `room_members` เพื่อความแม่นยำและประสิทธิภาพ
+- **Unread Separator**: เพิ่ม Logic ใน Frontend เพื่อแสดงเส้นคั่น "Unread messages" เมื่อเข้าห้องแชทที่มีข้อความใหม่
+- **Delete for Everyone**: เพิ่มระบบ Soft Delete โดยบันทึก `deleted_at` และแจ้งเตือนผ่าน WebSocket เพื่อเปลี่ยนข้อความเป็น "ลบข้อความนี้แล้ว" สำหรับทุกคน
+- **Optimization**: ใช้ `useMemo` สำหรับการคำนวณตัวคั่นข้อความใหม่เพื่อป้องกัน Performance issue และแก้ไข Lint errors
+
+### Validation
+- **Frontend Lint**: passed (0 errors, 2 warnings)
+- **Backend Flow**: ตรวจสอบ Logic ใน Repository และ Usecase ถูกต้องตามรูปแบบ Transactional, Go test/vet passed
+- **Manual Test**: ทดสอบการส่งข้อความ, การอ่าน, การแสดงจำนวนข้อความใหม่, และการลบข้อความ ทำงานได้ถูกต้องแบบ Real-time
+
+### Notes
+- แก้ไขปัญหา `rows.ColumnTypes undefined` ใน `chat_repository.go`
+- อัปเดต `mockRepo` ใน `chat_usecase_test.go` ให้รองรับ Interface ใหม่
+- แก้ไขปัญหา `Cannot find name 'deleteMessage'` โดยการ destructure `deleteMessage` ออกมาจาก `useChat` hook ใน `page.tsx`
+- ตาราง `room_read_states` ถูกลบออกและรวมเข้ากับ `room_members` แล้ว
+- ข้อความที่ถูกลบจะถูกซ่อน Metadata ทั้งหมด (เช่น รูปภาพ, ไฟล์, การอ้างอิง) เพื่อความเป็นส่วนตัว
+

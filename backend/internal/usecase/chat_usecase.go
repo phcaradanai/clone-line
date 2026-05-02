@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"github.com/phcar/chat-app-backend/internal/domain"
+	"time"
 )
 
 type ChatUsecase interface {
@@ -12,6 +13,7 @@ type ChatUsecase interface {
 	MarkAsRead(roomID string, userID string, lastReadMessageID string) error
 	GetUnreadCount(roomID string, userID string) (int, error)
 	GetMessageReaders(roomID string, messageID string) ([]domain.User, error)
+	DeleteMessage(messageID string, userID string, scope string) error
 }
 
 type chatUsecase struct {
@@ -53,7 +55,7 @@ func (u *chatUsecase) SendMessage(msg *domain.Message) error {
 
 	if u.publisher != nil {
 		u.publisher.Publish(msg.RoomID, map[string]interface{}{
-			"type": "message.created",
+			"type":    "message.created",
 			"payload": msg,
 		})
 	}
@@ -78,8 +80,8 @@ func (u *chatUsecase) MarkAsRead(roomID string, userID string, lastReadMessageID
 		u.publisher.Publish(roomID, map[string]interface{}{
 			"type": "room.read",
 			"payload": map[string]string{
-				"room_id": roomID,
-				"user_id": userID,
+				"room_id":              roomID,
+				"user_id":              userID,
 				"last_read_message_id": lastReadMessageID,
 			},
 		})
@@ -95,3 +97,27 @@ func (u *chatUsecase) GetMessageReaders(roomID string, messageID string) ([]doma
 	return u.repo.GetMessageReaders(roomID, messageID)
 }
 
+func (u *chatUsecase) DeleteMessage(messageID string, userID string, scope string) error {
+	msg, err := u.repo.GetMessage(messageID)
+	if err != nil {
+		return err
+	}
+	if msg.UserID != userID {
+		return domain.ValidationError{Message: "you can only delete your own messages"}
+	}
+
+	err = u.repo.DeleteMessage(messageID, userID, scope)
+	if err == nil && u.publisher != nil {
+		u.publisher.Publish(msg.RoomID, map[string]interface{}{
+			"type": "message.deleted",
+			"payload": map[string]interface{}{
+				"room_id":    msg.RoomID,
+				"message_id": messageID,
+				"deleted_by": userID,
+				"deleted_at": time.Now(),
+				"scope":      scope,
+			},
+		})
+	}
+	return err
+}

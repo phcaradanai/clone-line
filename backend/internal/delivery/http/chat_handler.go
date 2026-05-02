@@ -59,3 +59,33 @@ func (h *ChatHandler) GetMessageReaders(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(readers)
 }
+
+func (h *ChatHandler) DeleteMessage(w http.ResponseWriter, r *http.Request) {
+	messageID := r.PathValue("messageId")
+	if messageID == "" {
+		http.Error(w, "messageId is required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		UserID string `json:"user_id"`
+		Scope  string `json:"scope"` // everyone
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if payload.Scope == "" {
+		payload.Scope = "everyone"
+	}
+
+	err := h.chatUsecase.DeleteMessage(messageID, payload.UserID, payload.Scope)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}

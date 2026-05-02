@@ -298,6 +298,7 @@ function ChatContent() {
     messages, 
     sendMessage, 
     sendReadReceipt, 
+    deleteMessage,
     isConnected, 
     lastMessageSource,
     initialUnreadCount,
@@ -328,6 +329,19 @@ function ChatContent() {
   }, [scrollToBottom]);
 
   useVisualViewportResize(handleViewportResize);
+
+  // Compute unread separator (derived state)
+  const unreadSeparatorMessageId = React.useMemo(() => {
+    if (!isLoadingMessages && initialUnreadCount > 0 && messages.length > 0) {
+      // Find the first unread message from another user
+      const unreadMsgs = messages.filter(m => m.sender === 'other');
+      if (unreadMsgs.length >= initialUnreadCount) {
+        const firstUnread = unreadMsgs[unreadMsgs.length - initialUnreadCount];
+        return firstUnread?.id || null;
+      }
+    }
+    return null;
+  }, [isLoadingMessages, initialUnreadCount, messages]);
 
   useEffect(() => {
     if (!isMobile) {
@@ -559,81 +573,104 @@ function ChatContent() {
             </div>
           )}
 
-          {messagesError && (
-            <div className="mb-4 rounded-lg bg-red-50 p-3 text-center border border-red-100">
-              <p className="text-xs text-red-500 font-semibold">โหลดข้อความเก่าไม่สำเร็จ: {messagesError}</p>
-            </div>
-          )}
-
           {messages.map((msg, index) => {
             const isMe = msg.sender === "me";
             const isNewSender = index === 0 || messages[index - 1].sender !== msg.sender;
+            const showUnreadSeparator = unreadSeparatorMessageId === msg.id;
             
             return (
-              <div
-                key={msg.id || index}
-                id={msg.id ? `message-${msg.id}` : undefined}
-                data-message-id={msg.id}
-                className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 ${
-                  isMe ? "justify-end" : "justify-start"
-                } ${isNewSender ? "pt-3" : "pt-1"} p-1`}
-              >
+              <React.Fragment key={msg.id || index}>
+                {showUnreadSeparator && (
+                  <div className="my-6 flex items-center justify-center">
+                    <div className="h-px flex-1 bg-gray-200"></div>
+                    <span className="mx-4 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                      Unread messages / ข้อความใหม่
+                    </span>
+                    <div className="h-px flex-1 bg-gray-200"></div>
+                  </div>
+                )}
                 <div
-                  className={`relative flex max-w-[82%] flex-col md:max-w-[70%] ${
-                    isMe ? "items-end" : "items-start"
-                  }`}
+                  id={msg.id ? `message-${msg.id}` : undefined}
+                  data-message-id={msg.id}
+                  className={`flex w-full animate-in fade-in slide-in-from-bottom-2 duration-300 group ${
+                    isMe ? "justify-end" : "justify-start"
+                  } ${isNewSender ? "pt-3" : "pt-1"} p-1`}
                 >
                   <div
-                    className={`rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm transition-colors ${
-                      isMe
-                        ? "bg-[#06C755] text-white rounded-tr-[4px]"
-                        : "bg-white text-gray-800 rounded-tl-[4px] border border-gray-100"
+                    className={`relative flex max-w-[82%] flex-col md:max-w-[70%] ${
+                      isMe ? "items-end" : "items-start"
                     }`}
                   >
-                    {msg.reply_to_message && (
-                      <ReplyPreview 
-                        message={msg.reply_to_message} 
-                        isMe={isMe} 
-                        onClick={() => msg.reply_to_message?.id && jumpToMessage(msg.reply_to_message.id)} 
-                      />
-                    )}
-                    {msg.type === "image" ? (
-                      <img
-                        src={msg.file_url}
-                        alt="Uploaded"
-                        className="mb-1 h-auto max-w-full rounded-lg"
-                      />
-                    ) : (
-                      <p className="whitespace-pre-wrap break-words leading-5">
-                        {msg.content}
-                      </p>
-                    )}
-                  </div>
-
-                  <div className={`mt-1.5 flex items-center gap-1.5 text-[10px] ${
-                    isMe ? "flex-row-reverse" : "flex-row"
-                  }`}>
-                    <span className={isMe ? "text-[#06C755]/70" : "text-gray-400"}>
-                      {msg.time}
-                    </span>
-                    {isMe && (msg.read_count || 0) > 0 && (
-                      <span 
-                        className="font-medium text-[#06C755] cursor-pointer hover:underline"
-                        onClick={() => fetchReaders(msg.id!)}
-                      >
-                        Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
-                      </span>
-                    )}
-                    <button 
-                      onClick={() => setReplyingToMessage(msg)}
-                      className="text-gray-400 hover:text-gray-600 transition-colors mx-1"
-                      title="Reply"
+                    <div
+                      className={`relative rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm transition-colors ${
+                        isMe
+                          ? "bg-[#06C755] text-white rounded-tr-[4px]"
+                          : "bg-white text-gray-800 rounded-tl-[4px] border border-gray-100"
+                      } ${msg.is_deleted ? "!bg-gray-100 !text-gray-400 !border-gray-200 italic" : ""}`}
                     >
-                      <Reply size={12} />
-                    </button>
+                      {msg.reply_to_message && !msg.is_deleted && (
+                        <ReplyPreview 
+                          message={msg.reply_to_message} 
+                          isMe={isMe} 
+                          onClick={() => msg.reply_to_message?.id && jumpToMessage(msg.reply_to_message.id)} 
+                        />
+                      )}
+                      {msg.is_deleted ? (
+                        <p className="leading-5">ลบข้อความนี้แล้ว</p>
+                      ) : msg.type === "image" ? (
+                        <img
+                          src={msg.file_url}
+                          alt="Uploaded"
+                          className="mb-1 h-auto max-w-full rounded-lg"
+                        />
+                      ) : (
+                        <p className="whitespace-pre-wrap break-words leading-5">
+                          {msg.content}
+                        </p>
+                      )}
+                      
+                      {isMe && !msg.is_deleted && (
+                        <button 
+                          onClick={() => {
+                            if (window.confirm("Delete this message for everyone?")) {
+                              deleteMessage(msg.id!);
+                            }
+                          }}
+                          className="absolute -left-8 top-1/2 -translate-y-1/2 rounded-full p-1.5 text-gray-400 opacity-0 transition-opacity hover:bg-gray-100 hover:text-red-500 group-hover:opacity-100"
+                          title="Delete for everyone"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className={`mt-1.5 flex items-center gap-1.5 text-[10px] ${
+                      isMe ? "flex-row-reverse" : "flex-row"
+                    }`}>
+                      <span className={isMe ? "text-[#06C755]/70" : "text-gray-400"}>
+                        {msg.time}
+                      </span>
+                      {isMe && (msg.read_count || 0) > 0 && !msg.is_deleted && (
+                        <span 
+                          className="font-medium text-[#06C755] cursor-pointer hover:underline"
+                          onClick={() => fetchReaders(msg.id!)}
+                        >
+                          Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
+                        </span>
+                      )}
+                      {!msg.is_deleted && (
+                        <button 
+                          onClick={() => setReplyingToMessage(msg)}
+                          className="text-gray-400 hover:text-gray-600 transition-colors mx-1"
+                          title="Reply"
+                        >
+                          <Reply size={12} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
+              </React.Fragment>
             );
           })}
 

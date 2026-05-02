@@ -20,10 +20,10 @@ type Client struct {
 
 // Message represents a chat message
 type Message struct {
-	UserID   string `json:"user_id"`
-	RoomID   string `json:"room_id"`
-	Content  string `json:"content"`
-	Type     string `json:"type"`
+	UserID  string `json:"user_id"`
+	RoomID  string `json:"room_id"`
+	Content string `json:"content"`
+	Type    string `json:"type"`
 }
 
 // Hub maintains the set of active clients

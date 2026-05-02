@@ -13,10 +13,9 @@ This document summarizes the improvements and features implemented to transform 
 *   **New Message Indicator**: A floating "New messages ↓" button appears when the user is reading history, preventing unwanted scroll jumps.
 *   **Scroll Locking**: Prevented document-level scrolling to maintain a native app feel.
 
-## 3. Persistent Read Receipts & Group Support
-*   **Database Integration**: Added `last_read_message_id`, `last_read_at`, and a persistent `unread_count` column to the `room_members` table.
-*   **Real-time Sync**: `message:read` events are broadcast via WebSocket and persisted. Standardized the payload to `snake_case` across frontend and backend for maximum compatibility.
-*   **Group Read Count**: Implemented "Read N" behavior. Sent messages now display the number of users who have read them (e.g., "Read 2"), matching the LINE experience.
+*   **Group Read Receipts**: Sent messages display the total count of users who have read them (e.g., "Read 2"), matching the native LINE experience.
+*   **Monotonic Time-Based Updates**: Refactored the read status logic to use message `created_at` timestamps instead of UUID ordering, ensuring that read markers only move forward reliably in a UUID-based system.
+*   **Readers List Modal**: Clicking on the "Read N" text opens a modal showing the list of specific users (Avatar + Name) who have seen the message, excluding the sender and inactive members.
 *   **Reliable Triggering**: Enhanced the `useReadReceipt` hook with strict visibility checks and scroll position detection (`isAtBottom`), ensuring read receipts are sent only when the user is actually viewing the message.
 *   **Backend Verification**: Added `RowsAffected` checks and structured logging (`[DB]`, `[WS]`, `[AUTH]`) to track end-to-end receipt flow and identify membership issues.
 
@@ -35,8 +34,10 @@ This document summarizes the improvements and features implemented to transform 
 ## 6. Production Readiness & Stability
 *   **Error Handling & Resilience**: Added fallback room logic (General Chat) so the UI remains functional even if the `/rooms` API fails.
 *   **Non-Intrusive Error States**: Message loading errors now appear as compact banners, allowing real-time WebSocket communication to continue uninterrupted.
+*   **Request Logging & Performance**: Added HTTP logging middleware (Method, Path, Status, Duration) and DB context timeouts (5-10s) to all repository methods to prevent Gateway Timeouts and aid diagnostics.
+*   **WebSocket Hijacker Support**: Implemented `http.Hijacker` in the logging middleware to ensure seamless WebSocket upgrades without interfering with the connection lifecycle.
 *   **Strict UUID Validation**: All API endpoints and WebSocket handlers now perform pre-upgrade/pre-query UUID validation to prevent 500 Internal Server Errors.
-*   **Build-Time Hardening**: Fixed a critical TypeScript type mismatch in `useReadReceipt.ts` (optional message IDs) that was causing deployment failures, ensuring 100% build success.
+*   **Idempotent Migrations**: Migrated to a safe, idempotent SQL migration system (`IF NOT EXISTS`) to prevent data loss during schema updates.
 *   **Full Type Safety**: Passed all strict linting rules and achieved 100% TypeScript coverage.
 
 ## 7. Architecture (Custom Hooks)
@@ -48,10 +49,18 @@ The system is built on a modular hook-based architecture:
 *   `useChatAutoScroll`: Handles viewport-aware scrolling and bottom detection.
 *   `useIsMobile` & `useVisualViewportResize`: Mobile environment detection and keyboard management.
 
-## 8. UI Aesthetics & LINE Polish
+## 8. Rich Reply System & Jump-to-Original
+*   **Multi-Type Support**: Users can reply to any message (Text, Image, File). The system generates rich localized previews (e.g., "รูปภาพ", "ไฟล์แนบ").
+*   **Jump-to-Original**: Tapping a reply preview instantly scrolls the chat to the original message (`scrollIntoView`) with a smooth animation and a temporary green highlight for visual focus.
+*   **Dynamic Preview Banner**: A "Replying to..." banner appears above the input area, allowing users to cancel or verify the context before sending.
+*   **Image Thumbnails**: Reply previews for image messages include a small thumbnail of the original image for instant context recognition.
+*   **Deleted Message Handling**: If an original message is deleted, the reply preview gracefully updates to "ข้อความนี้ถูกลบแล้ว" rather than breaking.
+
+## 9. UI Aesthetics & LINE Polish
 *   **Message Bubbles**: Implemented responsive widths (82% mobile, 70% desktop) with `18px` rounded corners and conditional tail styling (`rounded-tr-[4px]` for sender, `rounded-tl-[4px]` for recipient).
+*   **Visual Polish**: Added background transitions and glassmorphism-inspired highlight effects for message jumps.
 *   **Smart Spacing**: Groups consecutive messages from the same sender with compact `pt-1` padding, while sender changes trigger `pt-3` spacing for clear separation.
 *   **Layout Detail**: Balanced message list padding (`px-3 py-4 md:px-4`) and refined bubble footers for a premium, native-app feel.
 
 ---
-*Last Updated: 2026-05-01 21:39 (UTC+7)*
+*Last Updated: 2026-05-02 01:05 (UTC+7)*

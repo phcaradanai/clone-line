@@ -15,6 +15,8 @@ type mockRepo struct {
 	GetMessagesFunc       func(roomID string, limit int, offset int) ([]domain.Message, error)
 }
 
+func (m *mockRepo) GetUnreadCount(roomID string, userID string) (int, error)          { return 0, nil }
+func (m *mockRepo) DeleteMessage(messageID string, userID string, scope string) error { return nil }
 func (m *mockRepo) GetMessage(messageID string) (*domain.Message, error) {
 	if m.GetMessageFunc != nil {
 		return m.GetMessageFunc(messageID)
@@ -39,21 +41,21 @@ func (m *mockRepo) GetMessageReaders(roomID, messageID string) ([]domain.User, e
 	}
 	return nil, nil
 }
-func (m *mockRepo) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) { 
+func (m *mockRepo) GetMessages(roomID string, limit int, offset int) ([]domain.Message, error) {
 	if m.GetMessagesFunc != nil {
 		return m.GetMessagesFunc(roomID, limit, offset)
 	}
-	return nil, nil 
+	return nil, nil
 }
-func (m *mockRepo) GetRooms(userID string) ([]domain.Room, error) { return nil, nil }
-func (m *mockRepo) GetRoom(roomID string) (*domain.Room, error) { return nil, nil }
+func (m *mockRepo) GetRooms(userID string) ([]domain.Room, error)          { return nil, nil }
+func (m *mockRepo) GetRoom(roomID string) (*domain.Room, error)            { return nil, nil }
 func (m *mockRepo) CreateRoom(room *domain.Room, memberIDs []string) error { return nil }
-func (m *mockRepo) RegisterUser(user *domain.User) error { return nil }
-func (m *mockRepo) GetUnreadCount(roomID string, userID string) (int, error) { return 0, nil }
+func (m *mockRepo) RegisterUser(user *domain.User) error                   { return nil }
 
 type mockPublisher struct {
 	PublishFunc func(roomID string, event interface{})
 }
+
 func (m *mockPublisher) Publish(roomID string, event interface{}) {
 	if m.PublishFunc != nil {
 		m.PublishFunc(roomID, event)
@@ -76,7 +78,7 @@ func TestSendMessage_ValidReply(t *testing.T) {
 	uc := usecase.NewChatUsecase(repo, pub)
 
 	err := uc.SendMessage(&domain.Message{
-		RoomID: "room-1",
+		RoomID:           "room-1",
 		ReplyToMessageID: &replyID,
 	})
 	if err != nil {
@@ -99,7 +101,7 @@ func TestSendMessage_InvalidReplyAnotherRoom(t *testing.T) {
 	uc := usecase.NewChatUsecase(repo, pub)
 
 	err := uc.SendMessage(&domain.Message{
-		RoomID: "room-1",
+		RoomID:           "room-1",
 		ReplyToMessageID: &replyID,
 	})
 	if err == nil {
@@ -115,13 +117,13 @@ func TestGetMessages_DeletedReplyPreview(t *testing.T) {
 		GetMessagesFunc: func(roomID string, limit, offset int) ([]domain.Message, error) {
 			return []domain.Message{
 				{
-					ID: "msg-2", 
+					ID:               "msg-2",
 					ReplyToMessageID: &replyID,
 					ReplyToMessage: &domain.Message{
-						ID: replyID,
-						Content: "ข้อความนี้ถูกลบแล้ว",
-						Type: "deleted",
-						Preview: "ข้อความนี้ถูกลบแล้ว",
+						ID:        replyID,
+						Content:   "ข้อความนี้ถูกลบแล้ว",
+						Type:      "deleted",
+						Preview:   "ข้อความนี้ถูกลบแล้ว",
 						IsDeleted: true,
 					},
 				},
@@ -130,7 +132,7 @@ func TestGetMessages_DeletedReplyPreview(t *testing.T) {
 	}
 	uc := usecase.NewChatUsecase(repo, &mockPublisher{})
 	msgs, _ := uc.GetChatHistory("room-1", 10, 0)
-	
+
 	if len(msgs) == 0 || msgs[0].ReplyToMessage == nil {
 		t.Fatal("expected reply to message to be populated")
 	}
@@ -140,7 +142,7 @@ func TestGetMessages_DeletedReplyPreview(t *testing.T) {
 }
 
 // 4. Test mark read moves forward only
-// The monotonic logic is enforced in the DB layer (ON CONFLICT DO UPDATE WHERE ... > ...). 
+// The monotonic logic is enforced in the DB layer (ON CONFLICT DO UPDATE WHERE ... > ...).
 // Here we just test the Usecase triggers it and publishes the event.
 func TestMarkAsRead_MonotonicAndPublisher(t *testing.T) {
 	published := false
