@@ -9,7 +9,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,17 +51,10 @@ func main() {
 	if err != nil {
 		log.Printf("Warning: Could not read migration file: %v", err)
 	} else {
-		// Split by semicolon and run each statement
-		statements := strings.Split(string(migrationSQL), ";")
-		for _, stmt := range statements {
-			stmt = strings.TrimSpace(stmt)
-			if stmt == "" {
-				continue
-			}
-			_, err = dbPool.Exec(context.Background(), stmt)
-			if err != nil {
-				log.Printf("Migration step failed: %v | Statement: %s", err, stmt)
-			}
+		log.Printf("Applying migrations from %s...", migrationPath)
+		_, err = dbPool.Exec(context.Background(), string(migrationSQL))
+		if err != nil {
+			log.Fatalf("Migration failed: %v", err)
 		}
 		log.Println("Migrations applied successfully")
 	}

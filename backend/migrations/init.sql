@@ -20,8 +20,8 @@ CREATE TABLE IF NOT EXISTS room_members (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     last_read_message_id UUID, -- No hard FK to allow message deletion placeholders
-    last_read_at TIMESTAMP WITH TIME ZONE,
-    unread_count INTEGER DEFAULT 0,
+    last_read_at TIMESTAMPTZ,
+    unread_count INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (room_id, user_id)
 );
 
@@ -34,34 +34,31 @@ CREATE TABLE IF NOT EXISTS messages (
     type VARCHAR(20) NOT NULL DEFAULT 'text',
     file_url TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP WITH TIME ZONE,
+    deleted_at TIMESTAMPTZ,
     deleted_by UUID REFERENCES users(id) ON DELETE SET NULL,
-    delete_scope VARCHAR(20)
+    delete_scope TEXT
 );
 
 -- Ensure columns exist if table was already created
 ALTER TABLE room_members ADD COLUMN IF NOT EXISTS last_read_message_id UUID;
-ALTER TABLE room_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMP WITH TIME ZONE;
-ALTER TABLE room_members ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0;
+ALTER TABLE room_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ;
+ALTER TABLE room_members ADD COLUMN IF NOT EXISTS unread_count INTEGER NOT NULL DEFAULT 0;
 
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+-- Ensure types and constraints are correct even if columns already existed
+ALTER TABLE room_members ALTER COLUMN unread_count SET DEFAULT 0;
+ALTER TABLE room_members ALTER COLUMN unread_count SET NOT NULL;
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id) ON DELETE SET NULL;
-ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_scope VARCHAR(20);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_scope TEXT;
 ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_message_id UUID;
 
--- 2. Data Migration & Table Cleanup
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'room_read_states') THEN
-        UPDATE room_members rm
-        SET last_read_message_id = rrs.last_read_message_id,
-            last_read_at = rrs.last_read_at
-        FROM room_read_states rrs
-        WHERE rm.room_id = rrs.room_id AND rm.user_id = rrs.user_id;
-        
-        DROP TABLE room_read_states;
-    END IF;
-END $$;
+-- Ensure types are correct
+ALTER TABLE messages ALTER COLUMN deleted_at TYPE TIMESTAMPTZ;
+ALTER TABLE messages ALTER COLUMN delete_scope TYPE TEXT;
+
+-- 2. Table Cleanup
+DROP TABLE IF EXISTS room_read_states;
 
 -- 3. Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);

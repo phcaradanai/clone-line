@@ -8,17 +8,14 @@
 - Added REST APIs for read receipts (`POST /api/v1/rooms/:roomId/read`) and readers list (`GET /api/v1/rooms/:roomId/messages/:messageId/readers`).
 
 ### Changed Files
-- backend/migrations/init.sql
-- backend/internal/domain/chat.go
-- backend/internal/repository/postgres/chat_repository.go
-- backend/internal/usecase/chat_usecase.go
-- backend/internal/delivery/http/chat_handler.go
-- backend/internal/delivery/ws/handler.go
-- backend/internal/delivery/ws/hub.go
 - backend/cmd/api/main.go
-- backend/internal/usecase/chat_usecase_test.go
+- backend/migrations/init.sql
+- docs/WORKLOG.md
 
 ### Details
+- **Migration Fix**: แก้ไขปัญหา SQL Migration พังเนื่องจากการ split semicolon แล้วเจอ `DO $$` โดยการเปลี่ยนตัวรัน Migration ให้รันทั้งไฟล์พร้อมกันและหยุดทำงานทันทีหากมี error
+- **Idempotency**: ปรับปรุง `init.sql` ให้ใช้ `ADD COLUMN IF NOT EXISTS`, `ALTER COLUMN TYPE`, และ `DROP TABLE IF EXISTS` เพื่อให้รันซ้ำได้และรองรับการอัปเดตจาก Database เดิม
+- **Column Types**: ปรับประเภทคอลัมน์เป็น `TIMESTAMPTZ`, `UUID`, และ `TEXT` ตามข้อกำหนดใหม่
 - **Reply Support**: Added `reply_to_message_id` to `messages` table (without `ON DELETE SET NULL` FK so that deleted messages can still be identified as replies and replaced with a deleted preview). Updated `SaveMessage` and `GetMessages` queries to join the replied message.
 - **Read States**: Migrated from `room_members` to a new `room_read_states` table. Implemented monotonic logic using Postgres `ON CONFLICT DO UPDATE ... WHERE ... > ...` to ensure `last_read_message_id` only moves forward based on `created_at`.
 - **Clean Architecture**: Refactored websocket broadcasting into an `EventPublisher` interface injected into the Usecase. Now `SendMessage` and `MarkAsRead` handle their respective business logic and publish events uniformly.
