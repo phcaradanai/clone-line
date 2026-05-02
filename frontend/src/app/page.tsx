@@ -170,6 +170,16 @@ function ChatContent() {
     loading: false,
   });
 
+  const [messageAction, setMessageAction] = useState<{
+    isOpen: boolean;
+    message: Message | null;
+  }>({
+    isOpen: false,
+    message: null,
+  });
+
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -297,6 +307,56 @@ function ChatContent() {
       console.warn("Message not found in DOM for jump.");
     }
   }, []);
+
+  const clearLongPressTimer = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
+  const openMessageAction = useCallback((msg: Message) => {
+    if (!msg || msg.is_deleted) return;
+
+    setMessageAction({
+      isOpen: true,
+      message: msg,
+    });
+  }, []);
+
+  const closeMessageAction = useCallback(() => {
+    setMessageAction({
+      isOpen: false,
+      message: null,
+    });
+  }, []);
+
+  const getMessagePreviewText = useCallback((msg: Message | null) => {
+    if (!msg) return "";
+    if (msg.is_deleted) return "ลบข้อความนี้แล้ว";
+    if (msg.type === "image") return msg.preview || "รูปภาพ";
+    if (msg.type === "file") return msg.preview || "ไฟล์แนบ";
+    return msg.preview || msg.content || "ข้อความ";
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      clearLongPressTimer();
+    };
+  }, [clearLongPressTimer]);
+
+  useEffect(() => {
+    if (!messageAction.isOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMessageAction();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [messageAction.isOpen, closeMessageAction]);
 
   useEffect(() => {
     const initUser = async () => {
@@ -738,12 +798,33 @@ function ChatContent() {
                       }`}
                   >
                     <div
+                      onContextMenu={(e) => {
+                        e.preventDefault();
+                        openMessageAction(msg);
+                      }}
+                      onMouseDown={(e) => {
+                        if (e.button !== 0) return;
+                        clearLongPressTimer();
+                        longPressTimerRef.current = setTimeout(() => {
+                          openMessageAction(msg);
+                        }, 550);
+                      }}
+                      onMouseUp={clearLongPressTimer}
+                      onMouseLeave={clearLongPressTimer}
+                      onTouchStart={() => {
+                        clearLongPressTimer();
+                        longPressTimerRef.current = setTimeout(() => {
+                          openMessageAction(msg);
+                        }, 550);
+                      }}
+                      onTouchEnd={clearLongPressTimer}
+                      onTouchCancel={clearLongPressTimer}
                       className={`relative max-w-full min-w-0 overflow-hidden rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm transition-colors ${isMe
                         ? "rounded-tr-[4px] bg-[#06C755] text-white"
                         : "rounded-tl-[4px] border border-gray-100 bg-white text-gray-800"
                         } ${msg.is_deleted
                           ? "!border-gray-200 !bg-gray-100 !text-gray-400 italic"
-                          : ""
+                          : "cursor-pointer select-none active:opacity-90"
                         }`}
                     >
                       {msg.reply_to_message && !msg.is_deleted && (
@@ -771,26 +852,6 @@ function ChatContent() {
                         <p className="whitespace-pre-wrap break-anywhere leading-5">
                           {msg.content}
                         </p>
-                      )}
-
-                      {isMe && !msg.is_deleted && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "Delete this message for everyone?",
-                              )
-                            ) {
-                              deleteMessage(msg.id!);
-                            }
-                          }}
-                          className="absolute -left-8 top-1/2 -translate-y-1/2 rounded-full bg-white p-1.5 text-gray-400 shadow-sm transition-colors hover:bg-gray-100 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
-                          title="Delete for everyone"
-                          aria-label="Delete message"
-                        >
-                          <X size={14} />
-                        </button>
                       )}
                     </div>
 
@@ -984,6 +1045,74 @@ function ChatContent() {
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+      {messageAction.isOpen && messageAction.message && (
+        <div
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/30 p-3 sm:items-center"
+          onClick={closeMessageAction}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-2 shadow-xl animate-in fade-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2">
+              <p className="text-xs font-medium text-gray-400">ตัวเลือกข้อความ</p>
+              <p className="mt-1 line-clamp-2 break-anywhere text-sm text-gray-700">
+                {getMessagePreviewText(messageAction.message)}
+              </p>
+            </div>
+
+            <div className="mt-1 overflow-hidden rounded-xl border border-gray-100">
+              {!messageAction.message.is_deleted && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!messageAction.message) return;
+                    setReplyingToMessage(messageAction.message);
+                    closeMessageAction();
+                  }}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100"
+                  aria-label="Reply to message"
+                >
+                  <span>ตอบกลับ</span>
+                  <Reply size={16} className="text-gray-400" />
+                </button>
+              )}
+
+              {messageAction.message.sender === "me" &&
+                !messageAction.message.is_deleted &&
+                messageAction.message.id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const msg = messageAction.message;
+                      closeMessageAction();
+
+                      if (!msg?.id) return;
+
+                      const ok = window.confirm("ลบข้อความนี้สำหรับทุกคน?");
+                      if (ok) {
+                        deleteMessage(msg.id);
+                      }
+                    }}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left text-sm text-red-500 hover:bg-red-50 active:bg-red-100"
+                    aria-label="Delete message for everyone"
+                  >
+                    <span>ลบข้อความ</span>
+                    <X size={16} />
+                  </button>
+                )}
+            </div>
+
+            <button
+              type="button"
+              onClick={closeMessageAction}
+              className="mt-2 w-full rounded-xl bg-gray-100 px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-200 active:bg-gray-300"
+            >
+              ยกเลิก
+            </button>
           </div>
         </div>
       )}

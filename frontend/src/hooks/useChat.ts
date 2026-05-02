@@ -268,26 +268,53 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
   const deleteMessage = useCallback(async (messageId: string) => {
     try {
       let baseUrl = `http://${window.location.hostname}:8888`;
+
       if (process.env.NEXT_PUBLIC_BACKEND_URL) {
         baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       }
 
+      console.log("[DELETE] request:", {
+        messageId,
+        userId,
+        url: `${baseUrl}/api/v1/messages/${messageId}`,
+      });
+
       const response = await fetch(`${baseUrl}/api/v1/messages/${messageId}`, {
         method: "DELETE",
         headers: {
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           user_id: userId,
-          scope: "everyone"
-        })
+          scope: "everyone",
+        }),
       });
 
+      console.log("[DELETE] response:", response.status);
+
       if (!response.ok) {
-        throw new Error("Failed to delete message");
+        const text = await response.text().catch(() => "");
+        throw new Error(`Failed to delete message: ${response.status} ${text}`);
       }
+
+      // Optimistic update
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? {
+                ...m,
+                is_deleted: true,
+                content: "ลบข้อความนี้แล้ว",
+                type: "deleted",
+                file_url: undefined,
+                reply_to_message: undefined,
+              }
+            : m,
+        ),
+      );
     } catch (error) {
       console.error("[DELETE] failed to delete message:", error);
+      alert("ลบข้อความไม่สำเร็จ");
     }
   }, [userId]);
 

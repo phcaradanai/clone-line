@@ -199,4 +199,44 @@
 - **Schema**: Verified `room_members` and `messages` columns and indexes match requirements.
 
 ### Notes
-- None
+
+## 2026-05-02 19:22
+
+### Summary
+- Implemented LINE-like message action menu (Action Sheet) for mobile and desktop.
+- Fixed message action discoverability: Long-press and right-click support.
+- Enhanced delete message reliability with optimistic updates and ownership validation.
+
+### Changed Files
+- frontend/src/hooks/useChat.ts
+- frontend/src/app/page.tsx
+- backend/internal/repository/postgres/chat_repository.go
+- docs/WORKLOG.md
+
+### Details
+- **Action Menu (Action Sheet)**:
+  - Added a mobile-first bottom action sheet that opens on long-press (550ms).
+  - Added right-click (context menu) support for desktop to open the same menu.
+  - Implemented a message preview in the menu with line clamping and Thai localization.
+  - Actions include "Reply" and "Delete Message" (Thai: "ตอบกลับ", "ลบข้อความ").
+- **Delete Logic Improvements**:
+  - **Optimistic UI**: Messages are updated to "deleted" state immediately upon successful API response, without waiting for WebSocket.
+  - **Ownership & Persistence**: Updated `DeleteMessage` in repository to strictly enforce ownership and return a `ValidationError` if unauthorized or not found.
+  - **Discoverability**: Removed the old unreliable hover-only delete button which was often clipped or inaccessible on touch devices.
+- **Visual & UX**:
+  - Used tailwind-like classes for a premium "Action Sheet" look.
+  - Added `select-none` and `active:opacity-90` to message bubbles to hint at interactivity.
+  - Supported closing the menu via overlay click or Escape key.
+
+### Validation
+- **Frontend**: `npm run lint` passed (warnings on <img> preserved), `npm run build` passed successfully.
+- **Backend**: `gofmt`, `go vet`, and `go test ./...` passed in the backend directory.
+- **Manual Verification**:
+  - Long-press on mobile opens bottom sheet.
+  - Right-click on desktop opens menu.
+  - Delete action only visible for own messages.
+  - Deleted messages cannot be deleted again.
+
+### Notes
+- The "อ่านแล้ว" (Read Receipt) display was preserved and remains only for the sender's own non-deleted messages.
+- Future improvement: Consider replacing standard `window.confirm` with a custom styled modal for full "LINE-like" experience.

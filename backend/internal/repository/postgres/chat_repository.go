@@ -416,8 +416,16 @@ func (r *chatRepository) DeleteMessage(messageID string, userID string, scope st
 
 	query := `UPDATE messages SET deleted_at = NOW(), deleted_by = $2, delete_scope = $3 
 	          WHERE id = $1 AND user_id = $2`
-	_, err := r.db.Exec(ctx, query, messageID, userID, scope)
-	return err
+	result, err := r.db.Exec(ctx, query, messageID, userID, scope)
+	if err != nil {
+		return err
+	}
+
+	if result.RowsAffected() == 0 {
+		return domain.ValidationError{Message: "message not found or not owned by user"}
+	}
+
+	return nil
 }
 
 func (r *chatRepository) RegisterUser(user *domain.User) error {
