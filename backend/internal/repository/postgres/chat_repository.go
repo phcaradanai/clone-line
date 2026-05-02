@@ -90,10 +90,9 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 			       m.created_at,
 			       (SELECT COUNT(rm_r.user_id) 
 			        FROM room_members rm_r 
-			        JOIN messages m_read ON rm_r.last_read_message_id = m_read.id
 			        WHERE rm_r.room_id = m.room_id 
 			        AND rm_r.user_id != m.user_id 
-			        AND m_read.created_at >= m.created_at) as read_count,
+			        AND rm_r.last_read_at >= m.created_at) as read_count,
 			       COALESCE(u.username, 'anonymous') as username, 
 			       COALESCE(u.display_name, 'Unknown User') as display_name, 
 			       COALESCE(u.avatar_url, '') as avatar_url,

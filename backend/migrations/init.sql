@@ -39,7 +39,31 @@ CREATE TABLE IF NOT EXISTS messages (
     delete_scope VARCHAR(20)
 );
 
--- 2. Indexes
+-- Ensure columns exist if table was already created
+ALTER TABLE room_members ADD COLUMN IF NOT EXISTS last_read_message_id UUID;
+ALTER TABLE room_members ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE room_members ADD COLUMN IF NOT EXISTS unread_count INTEGER DEFAULT 0;
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP WITH TIME ZONE;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS deleted_by UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS delete_scope VARCHAR(20);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_message_id UUID;
+
+-- 2. Data Migration & Table Cleanup
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'room_read_states') THEN
+        UPDATE room_members rm
+        SET last_read_message_id = rrs.last_read_message_id,
+            last_read_at = rrs.last_read_at
+        FROM room_read_states rrs
+        WHERE rm.room_id = rrs.room_id AND rm.user_id = rrs.user_id;
+        
+        DROP TABLE room_read_states;
+    END IF;
+END $$;
+
+-- 3. Indexes
 CREATE INDEX IF NOT EXISTS idx_messages_room_id ON messages(room_id);
 CREATE INDEX IF NOT EXISTS idx_messages_room_created_at ON messages(room_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
@@ -47,6 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_reply_to_message_id ON messages(reply_to
 CREATE INDEX IF NOT EXISTS idx_messages_deleted_at ON messages(deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_unread ON room_members(room_id, user_id) WHERE unread_count > 0;
+CREATE INDEX IF NOT EXISTS idx_room_members_last_read_at ON room_members(last_read_at);
 
 -- 3. Essential Seed Data
 -- Insert Default Room for testing

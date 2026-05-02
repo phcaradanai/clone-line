@@ -155,6 +155,8 @@
 - **Manual Test**: ทดสอบการส่งข้อความ, การอ่าน, การแสดงจำนวนข้อความใหม่, และการลบข้อความ ทำงานได้ถูกต้องแบบ Real-time
 
 ### Notes
+- แก้ไขปัญหา `ERROR: column "deleted_at" does not exist` โดยการเพิ่ม `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` ลงใน `init.sql` เพื่อให้ระบบ Migration รองรับการอัปเดต Database เดิม
+- ย้าย Logic การ Migration ข้อมูลจาก `room_read_states` ไปยัง `init.sql` เพื่อให้รันได้โดยอัตโนมัติเมื่อ Server Restart
 - แก้ไขปัญหา `rows.ColumnTypes undefined` ใน `chat_repository.go`
 - อัปเดต `mockRepo` ใน `chat_usecase_test.go` ให้รองรับ Interface ใหม่
 - แก้ไขปัญหา `Cannot find name 'deleteMessage'` โดยการ destructure `deleteMessage` ออกมาจาก `useChat` hook ใน `page.tsx`
