@@ -48,16 +48,16 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
         if (envBackendUrl) {
           baseUrl = envBackendUrl;
         }
-        
+
         // Load messages
         const response = await fetch(`${baseUrl}/messages?room_id=${roomId}`);
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
           throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         if (Array.isArray(data)) {
           const formattedMessages: Message[] = data.map((msg: Message & { created_at: string, read_count: number }) => ({
             ...msg,
@@ -70,9 +70,9 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
             // Merge history with any real-time messages that arrived while loading
             const merged = [...formattedMessages];
             prev.forEach(pMsg => {
-               if (pMsg.id && !merged.some(m => m.id === pMsg.id)) {
-                 merged.push(pMsg);
-               }
+              if (pMsg.id && !merged.some(m => m.id === pMsg.id)) {
+                merged.push(pMsg);
+              }
             });
             // Re-sort by ID or index if needed, but history is already ASC and WS appends to end
             return merged;
@@ -102,7 +102,7 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
     const isSecure = window.location.protocol === 'https:';
     const protocol = isSecure ? 'wss:' : 'ws:';
     let host = window.location.hostname;
-    
+
     // ถ้ามีการระบุ Backend URL ภายนอก (สำหรับ Tunnel) ให้ตัดโปรโตคอลออกเอาแต่ hostname
     const envBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
     if (envBackendUrl) {
@@ -110,7 +110,7 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
     }
 
     const wsUrl = `${protocol}//${host}:8888/ws?user_id=${userId}`;
-    
+
     // ถ้ามีการระบุ Backend URL ภายนอก ให้พยายามสร้าง WebSocket URL จากค่านั้น
     let finalWsUrl = wsUrl;
     if (envBackendUrl) {
@@ -118,7 +118,7 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
       const wsHost = envBackendUrl.replace(/^https?:\/\//, '');
       finalWsUrl = `${wsProtocol}//${wsHost}/ws?user_id=${userId}`;
     }
-    
+
     const socket = new WebSocket(finalWsUrl);
     socketRef.current = socket;
 
@@ -130,23 +130,36 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
     socket.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        
-        if (data.type === 'room.read') {
-          const { last_read_message_id: lastReadMessageId, user_id: readerId, room_id: eventRoomId } = data.payload;
-          
+
+        if (data.type === "room.read") {
+          const {
+            last_read_message_id: lastReadMessageId,
+            user_id: readerId,
+            room_id: eventRoomId,
+          } = data.payload;
+
           if (eventRoomId === roomId && readerId !== userId) {
             setMessages((prev) => {
-              const readIndex = prev.findIndex(m => m.id === lastReadMessageId);
+              const readIndex = prev.findIndex((m) => m.id === lastReadMessageId);
               if (readIndex === -1) return prev;
-              
+
               return prev.map((msg, index) => {
-                if (msg.sender === 'me' && index <= readIndex) {
-                  return { ...msg, read_count: Math.max(msg.read_count || 0, 1) };
+                if (
+                  index <= readIndex &&
+                  !msg.is_deleted &&
+                  msg.user_id === userId
+                ) {
+                  return {
+                    ...msg,
+                    read_count: Math.max(msg.read_count || 0, 1),
+                  };
                 }
+
                 return msg;
               });
             });
           }
+
           return;
         }
 
@@ -155,10 +168,10 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
           if (eventRoomId === roomId) {
             setMessages((prev) => prev.map(m => {
               if (m.id === deletedId) {
-                return { 
-                  ...m, 
-                  is_deleted: true, 
-                  content: "ลบข้อความนี้แล้ว", 
+                return {
+                  ...m,
+                  is_deleted: true,
+                  content: "ลบข้อความนี้แล้ว",
                   type: 'deleted',
                   file_url: undefined,
                   reply_to_message: undefined
@@ -186,7 +199,7 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
         if (onNewMessage) {
           onNewMessage(incomingMsg);
         }
-        
+
         // Only add to message list if it's for the current room
         if (incomingMsg.room_id === roomId) {
           setMessages((prev) => {
@@ -236,7 +249,7 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
       }
 
       console.log("[READ] sending REST payload for message:", lastReadMessageId);
-      
+
       await fetch(`${baseUrl}/api/v1/rooms/${roomId}/read`, {
         method: "POST",
         headers: {
@@ -278,13 +291,13 @@ export function useChat(roomId: string, userId: string, onNewMessage?: (msg: Mes
     }
   }, [userId]);
 
-  return { 
-    messages, 
-    isConnected, 
-    sendMessage, 
-    sendReadReceipt, 
+  return {
+    messages,
+    isConnected,
+    sendMessage,
+    sendReadReceipt,
     deleteMessage,
-    lastMessageSource, 
+    lastMessageSource,
     initialUnreadCount,
     isLoadingMessages,
     messagesError

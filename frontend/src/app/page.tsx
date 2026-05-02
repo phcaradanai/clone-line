@@ -81,10 +81,10 @@ const ReplyPreview = ({
       <div className="min-w-0 flex-1 overflow-hidden">
         <span
           className={`block max-w-full truncate font-semibold ${isBanner
-              ? "text-[#06C755]"
-              : isMe
-                ? "text-white/90"
-                : "text-[#06C755]"
+            ? "text-[#06C755]"
+            : isMe
+              ? "text-white/90"
+              : "text-[#06C755]"
             }`}
         >
           {isBanner ? `Replying to ${senderName}` : senderName}
@@ -739,8 +739,8 @@ function ChatContent() {
                   >
                     <div
                       className={`relative max-w-full min-w-0 overflow-hidden rounded-[18px] px-3.5 py-2 text-[14px] shadow-sm transition-colors ${isMe
-                          ? "rounded-tr-[4px] bg-[#06C755] text-white"
-                          : "rounded-tl-[4px] border border-gray-100 bg-white text-gray-800"
+                        ? "rounded-tr-[4px] bg-[#06C755] text-white"
+                        : "rounded-tl-[4px] border border-gray-100 bg-white text-gray-800"
                         } ${msg.is_deleted
                           ? "!border-gray-200 !bg-gray-100 !text-gray-400 italic"
                           : ""
@@ -811,7 +811,7 @@ function ChatContent() {
                           className="cursor-pointer font-medium text-[#06C755] hover:underline"
                           onClick={() => fetchReaders(msg.id!)}
                         >
-                          Read {(msg.read_count || 0) > 1 ? msg.read_count : ""}
+                          อ่านแล้ว {(msg.read_count || 0) > 1 ? msg.read_count : ""}
                         </span>
                       )}
 
@@ -870,8 +870,8 @@ function ChatContent() {
 
           <div
             className={`flex min-w-0 max-w-full items-end gap-2 overflow-hidden rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2 transition-all focus-within:border-[#06C755] md:gap-3 md:px-4 ${replyingToMessage
-                ? "rounded-tl-none rounded-tr-none border-t-0"
-                : ""
+              ? "rounded-tl-none rounded-tr-none border-t-0"
+              : ""
               }`}
           >
             <input
@@ -922,8 +922,8 @@ function ChatContent() {
               onClick={handleSend}
               disabled={!inputValue.trim() || !isConnected}
               className={`shrink-0 rounded-full p-2 transition-all ${inputValue.trim() && isConnected
-                  ? "bg-[#06C755] text-white active:scale-95"
-                  : "cursor-not-allowed text-gray-300"
+                ? "bg-[#06C755] text-white active:scale-95"
+                : "cursor-not-allowed text-gray-300"
                 }`}
               aria-label="Send message"
             >

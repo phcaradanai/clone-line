@@ -88,11 +88,15 @@ func (r *chatRepository) GetMessages(roomID string, limit int, offset int) ([]do
 			       m.type, 
 			       COALESCE(m.file_url, '') as file_url, 
 			       m.created_at,
-			       (SELECT COUNT(rm_r.user_id) 
-			        FROM room_members rm_r 
-			        WHERE rm_r.room_id = m.room_id 
-			        AND rm_r.user_id != m.user_id 
-			        AND rm_r.last_read_at >= m.created_at) as read_count,
+			       (
+					SELECT COUNT(rm_r.user_id)
+					FROM room_members rm_r
+					JOIN messages read_msg
+						ON read_msg.id = rm_r.last_read_message_id
+					WHERE rm_r.room_id = m.room_id
+						AND rm_r.user_id != m.user_id
+						AND read_msg.created_at >= m.created_at
+				   ) AS read_count,
 			       COALESCE(u.username, 'anonymous') as username, 
 			       COALESCE(u.display_name, 'Unknown User') as display_name, 
 			       COALESCE(u.avatar_url, '') as avatar_url,
@@ -192,12 +196,19 @@ func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessag
 			last_read_message_id = $3,
 			last_read_at = NOW(),
 			unread_count = 0
-		WHERE room_id = $1 AND user_id = $2
-		AND (
-			last_read_message_id IS NULL OR 
-			(SELECT created_at FROM messages WHERE id = $3) > 
-			(SELECT created_at FROM messages WHERE id = last_read_message_id)
-		)`
+		WHERE room_id = $1
+			AND user_id = $2
+			AND EXISTS (
+				SELECT 1
+				FROM messages
+				WHERE id = $3
+				AND room_id = $1
+			)
+			AND (
+				last_read_message_id IS NULL OR 
+				(SELECT created_at FROM messages WHERE id = $3) >= 
+				(SELECT created_at FROM messages WHERE id = last_read_message_id)
+			)`
 
 	result, err := r.db.Exec(ctx, query, roomID, userID, lastReadMessageID)
 	if err != nil {
