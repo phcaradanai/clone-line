@@ -25,13 +25,6 @@ type Room struct {
 	LastReadAt        *time.Time `json:"last_read_at,omitempty"`
 }
 
-type RoomReadState struct {
-	RoomID            string     `json:"room_id"`
-	UserID            string     `json:"user_id"`
-	LastReadMessageID *string    `json:"last_read_message_id,omitempty"`
-	LastReadAt        *time.Time `json:"last_read_at,omitempty"`
-	UnreadCount       int        `json:"unread_count"`
-}
 type Message struct {
 	ID               string     `json:"id"`
 	RoomID           string     `json:"room_id"`

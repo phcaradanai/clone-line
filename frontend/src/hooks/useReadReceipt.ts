@@ -17,10 +17,13 @@ export function useReadReceipt(
   const currentRoomIdRef = useRef<string>(messages[0]?.room_id || "");
 
   // Reset ref if room changes
-  if (messages.length > 0 && messages[0].room_id !== currentRoomIdRef.current) {
-    lastReadIdRef.current = null;
-    currentRoomIdRef.current = messages[0].room_id;
-  }
+  useEffect(() => {
+    const roomId = messages[0]?.room_id || "";
+    if (roomId && roomId !== currentRoomIdRef.current) {
+      lastReadIdRef.current = null;
+      currentRoomIdRef.current = roomId;
+    }
+  }, [messages]);
 
   useEffect(() => {
     const latestOtherMessage = [...messages].reverse().find(m => m.sender === "other");
