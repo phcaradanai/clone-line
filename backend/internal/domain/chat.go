@@ -60,6 +60,7 @@ type ChatRepository interface {
 	GetMessageReaders(roomID string, messageID string) ([]User, error)
 	GetMessage(messageID string) (*Message, error)
 	DeleteMessage(messageID string, userID string, scope string) error
+	AddUserToRoom(roomID string, userID string) error
 }
 
 type ValidationError struct {

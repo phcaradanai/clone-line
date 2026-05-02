@@ -51,6 +51,7 @@ func (m *mockRepo) GetRooms(userID string) ([]domain.Room, error)          { ret
 func (m *mockRepo) GetRoom(roomID string) (*domain.Room, error)            { return nil, nil }
 func (m *mockRepo) CreateRoom(room *domain.Room, memberIDs []string) error { return nil }
 func (m *mockRepo) RegisterUser(user *domain.User) error                   { return nil }
+func (m *mockRepo) AddUserToRoom(roomID string, userID string) error       { return nil }
 
 type mockPublisher struct {
 	PublishFunc func(roomID string, event interface{})

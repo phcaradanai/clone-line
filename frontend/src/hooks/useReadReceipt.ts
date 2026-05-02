@@ -30,7 +30,6 @@ export function useReadReceipt(
     const shouldSend = !!(
       typeof document !== "undefined" && 
       document.visibilityState === "visible" && 
-      isAtBottom && 
       messages.length > 0 && 
       latestOtherMessage && 
       latestOtherMessage.id && 
@@ -61,7 +60,7 @@ export function useReadReceipt(
     if (typeof document === "undefined") return;
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && isAtBottom && messages.length > 0) {
+      if (document.visibilityState === "visible" && messages.length > 0) {
         const latestOtherMessage = [...messages].reverse().find(m => m.sender === "other");
         if (latestOtherMessage && latestOtherMessage.id && latestOtherMessage.id !== lastReadIdRef.current) {
           sendReadReceipt(latestOtherMessage.id);

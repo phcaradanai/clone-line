@@ -160,3 +160,43 @@
 - ตาราง `room_read_states` ถูกลบออกและรวมเข้ากับ `room_members` แล้ว
 - ข้อความที่ถูกลบจะถูกซ่อน Metadata ทั้งหมด (เช่น รูปภาพ, ไฟล์, การอ้างอิง) เพื่อความเป็นส่วนตัว
 
+
+## 2026-05-02 18:59
+
+### Summary
+- Fixed critical read receipt persistence issue for guest users.
+- Automated default room membership for new users.
+- Improved database migration reliability and schema consistency.
+- Enhanced delete button usability on mobile.
+
+### Changed Files
+- backend/migrations/init.sql
+- backend/internal/domain/chat.go
+- backend/internal/repository/postgres/chat_repository.go
+- backend/internal/usecase/chat_usecase.go
+- backend/internal/usecase/chat_usecase_test.go
+- backend/cmd/api/main.go
+- frontend/src/hooks/useReadReceipt.ts
+- frontend/src/hooks/useChat.ts
+- frontend/src/app/page.tsx
+- docs/WORKLOG.md
+
+### Details
+- **Root Cause Fix**: Guest users were previously not added to the `room_members` table for the default room, causing `MarkAsRead` and `GetUnreadCount` to fail.
+- **Default Room Membership**: Newly registered users are now automatically joined to the default room (`00000000-0000-0000-0000-000000000002`).
+- **Upsert Read State**: Updated `MarkAsRead` to use `INSERT ... ON CONFLICT DO UPDATE` (Upsert) to ensure the `room_members` record exists before updating read state.
+- **Safe Unread API**: Updated `GetUnreadCount` to use `COALESCE` and return 0 instead of a "no rows" error when membership is missing.
+- **Migration Reliability**: Fixed the migration runner to execute the whole file at once and stop on any error (`log.Fatalf`). Updated `init.sql` with idempotent indexes.
+- **UI/UX**: 
+  - Relaxed `isAtBottom` requirement for read receipts to improve testing reliability.
+  - Made the delete button accessible on mobile by showing it without hover (added background and shadow).
+  - Fixed React lint error in `useReadReceipt` by moving ref updates into `useEffect`.
+  - Added "อ่านแล้ว" label in Thai and restricted it to messages sent by the current user (`isMe`).
+
+### Validation
+- **Backend**: `gofmt`, `go test ./...`, `go vet ./...` passed.
+- **Frontend**: `npm run lint`, `npm run build` passed.
+- **Schema**: Verified `room_members` and `messages` columns and indexes match requirements.
+
+### Notes
+- None

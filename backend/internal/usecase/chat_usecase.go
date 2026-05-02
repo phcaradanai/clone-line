@@ -71,7 +71,13 @@ func (u *chatUsecase) GetUserRooms(userID string) ([]domain.Room, error) {
 }
 
 func (u *chatUsecase) RegisterUser(user *domain.User) error {
-	return u.repo.RegisterUser(user)
+	err := u.repo.RegisterUser(user)
+	if err != nil {
+		return err
+	}
+	// Automatically join default room
+	defaultRoomID := "00000000-0000-0000-0000-000000000002"
+	return u.repo.AddUserToRoom(defaultRoomID, user.ID)
 }
 
 func (u *chatUsecase) MarkAsRead(roomID string, userID string, lastReadMessageID string) error {

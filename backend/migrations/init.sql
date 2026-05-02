@@ -66,9 +66,12 @@ CREATE INDEX IF NOT EXISTS idx_messages_room_created_at ON messages(room_id, cre
 CREATE INDEX IF NOT EXISTS idx_messages_user_id ON messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_messages_reply_to_message_id ON messages(reply_to_message_id);
 CREATE INDEX IF NOT EXISTS idx_messages_deleted_at ON messages(deleted_at) WHERE deleted_at IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_room_members_room_user_unique ON room_members(room_id, user_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_user_id ON room_members(user_id);
 CREATE INDEX IF NOT EXISTS idx_room_members_unread ON room_members(room_id, user_id) WHERE unread_count > 0;
 CREATE INDEX IF NOT EXISTS idx_room_members_last_read_at ON room_members(last_read_at);
+CREATE INDEX IF NOT EXISTS idx_room_members_last_read_message_id ON room_members(last_read_message_id);
 
 -- 3. Essential Seed Data
 -- Insert Default Room for testing

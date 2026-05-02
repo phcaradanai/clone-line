@@ -785,7 +785,7 @@ function ChatContent() {
                               deleteMessage(msg.id!);
                             }
                           }}
-                          className="absolute -left-8 top-1/2 rounded-full p-1.5 text-gray-400 opacity-0 transition-opacity -translate-y-1/2 hover:bg-gray-100 hover:text-red-500 group-hover:opacity-100"
+                          className="absolute -left-8 top-1/2 -translate-y-1/2 rounded-full bg-white p-1.5 text-gray-400 shadow-sm transition-colors hover:bg-gray-100 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
                           title="Delete for everyone"
                           aria-label="Delete message"
                         >

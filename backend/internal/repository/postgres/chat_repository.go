@@ -192,22 +192,40 @@ func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessag
 	log.Printf("[DB] mark read attempt | user: %s | room: %s | msg: %s", userID, roomID, lastReadMessageID)
 
 	query := `
-		UPDATE room_members SET 
-			last_read_message_id = $3,
+		INSERT INTO room_members (
+			room_id,
+			user_id,
+			last_read_message_id,
+			last_read_at,
+			unread_count
+		)
+		SELECT
+			$1,
+			$2,
+			$3,
+			NOW(),
+			0
+		WHERE EXISTS (
+			SELECT 1
+			FROM messages
+			WHERE id = $3
+			AND room_id = $1
+		)
+		ON CONFLICT (room_id, user_id)
+		DO UPDATE SET
+			last_read_message_id = EXCLUDED.last_read_message_id,
 			last_read_at = NOW(),
 			unread_count = 0
-		WHERE room_id = $1
-			AND user_id = $2
-			AND EXISTS (
-				SELECT 1
-				FROM messages
-				WHERE id = $3
-				AND room_id = $1
-			)
-			AND (
-				last_read_message_id IS NULL OR 
-				(SELECT created_at FROM messages WHERE id = $3) >= 
-				(SELECT created_at FROM messages WHERE id = last_read_message_id)
+		WHERE
+			room_members.last_read_message_id IS NULL
+			OR (
+				SELECT new_msg.created_at
+				FROM messages new_msg
+				WHERE new_msg.id = EXCLUDED.last_read_message_id
+			) >= (
+				SELECT old_msg.created_at
+				FROM messages old_msg
+				WHERE old_msg.id = room_members.last_read_message_id
 			)`
 
 	result, err := r.db.Exec(ctx, query, roomID, userID, lastReadMessageID)
@@ -216,7 +234,11 @@ func (r *chatRepository) MarkAsRead(roomID string, userID string, lastReadMessag
 	}
 
 	rowsAffected := result.RowsAffected()
-	log.Printf("[DB] mark read success | rows_affected: %d", rowsAffected)
+	if rowsAffected == 0 {
+		log.Printf("[DB] mark read ignored | user: %s | reason: stale read or invalid message", userID)
+	} else {
+		log.Printf("[DB] mark read success | rows_affected: %d", rowsAffected)
+	}
 
 	return nil
 }
@@ -256,11 +278,20 @@ func (r *chatRepository) GetUnreadCount(roomID string, userID string) (int, erro
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	query := `SELECT unread_count FROM room_members WHERE room_id = $1 AND user_id = $2`
+	// Use COALESCE to return 0 if membership row is missing
+	query := `SELECT COALESCE((
+		SELECT unread_count
+		FROM room_members
+		WHERE room_id = $1 AND user_id = $2
+	), 0)`
 
 	var count int
 	err := r.db.QueryRow(ctx, query, roomID, userID).Scan(&count)
-	return count, err
+	if err != nil {
+		log.Printf("[DB] GetUnreadCount error | room: %s | user: %s | err: %v", roomID, userID, err)
+		return 0, err
+	}
+	return count, nil
 }
 
 func (r *chatRepository) GetRooms(userID string) ([]domain.Room, error) {
@@ -396,4 +427,15 @@ func (r *chatRepository) RegisterUser(user *domain.User) error {
 	query := `INSERT INTO users (username, display_name) VALUES ($1, $2) RETURNING id, created_at`
 	return r.db.QueryRow(ctx, query, user.Username, user.DisplayName).
 		Scan(&user.ID, &user.CreatedAt)
+}
+
+func (r *chatRepository) AddUserToRoom(roomID string, userID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	query := `INSERT INTO room_members (room_id, user_id, unread_count)
+	          VALUES ($1, $2, 0)
+	          ON CONFLICT (room_id, user_id) DO NOTHING`
+	_, err := r.db.Exec(ctx, query, roomID, userID)
+	return err
 }
