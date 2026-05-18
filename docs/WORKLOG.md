@@ -240,3 +240,20 @@
 ### Notes
 - The "อ่านแล้ว" (Read Receipt) display was preserved and remains only for the sender's own non-deleted messages.
 - Future improvement: Consider replacing standard `window.confirm` with a custom styled modal for full "LINE-like" experience.
+
+## 2026-05-02
+
+### Summary
+- Fixed 504 issue after redeploy.
+
+### Details
+- Backend was healthy and `localhost:8888` endpoints worked.
+- Public Coolify generated domain returned 504.
+- Backend logs did not receive `/rooms` or `/messages` requests.
+- Root cause was likely stale Coolify proxy/upstream routing after deployment.
+- Redeploying the service refreshed routing and resolved the issue.
+
+### Validation
+- `GET /rooms` via public domain returns 200.
+- `GET /messages` via public domain returns 200.
+- Backend logs now show incoming HTTP requests.
