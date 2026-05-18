@@ -7,7 +7,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-pg!@1234}@postgres_r1:5432/${POSTGRES_DB:-postgres}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-pg!@1234}@postgres_r1:5432/${POSTGRES_DB:-clone_line_db}?sslmode=disable
       PORT: 8888
       MINIO_ENDPOINT: minio_r1:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-admin}
