@@ -36,6 +36,5 @@ services:
 
 networks:
   public_network:
-    driver: overlay
     external: true
 
