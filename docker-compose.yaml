@@ -16,8 +16,6 @@ services:
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:-http://gvbesaz3jj52upp8d3qnstp6.157.85.103.69.sslip.io}
     ports:
       - "8888:8888"
-    networks:
-      - public_network
 
   frontend:
     build:
@@ -31,10 +29,5 @@ services:
       - "3000:3000"
     depends_on:
       - backend
-    networks:
-      - public_network
-
-networks:
-  public_network:
-    external: true
+    
 
